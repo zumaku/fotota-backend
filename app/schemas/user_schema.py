@@ -26,8 +26,10 @@ class UserInDBBase(UserBase):
 # Properti yang dikembalikan ke client (tanpa data sensitif)
 class UserPublic(UserBase):
     id: int
-    google_id: Optional[str] = None # Mungkin ingin disembunyikan tergantung kasus
+    is_admin: bool
+    selfie: Optional[str] = None
     created_at: datetime
+    # 'name' dan 'picture' sudah diwarisi dari UserBase
 
     class Config:
         from_attributes = True
