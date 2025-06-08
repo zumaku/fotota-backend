@@ -1,14 +1,15 @@
 # app/api/routers/event_router.py
 
 import uuid
-from typing import List
+import math
+from enum import Enum
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api import deps
-from app.crud import crud_event
+from app.crud import crud_event, crud_image
 from app.db.models import User as UserModel, Event as EventModel
-from app.schemas import event_schema
+from app.schemas import event_schema, pagination_schema, image_schema
 
 router = APIRouter()
 
@@ -107,3 +108,63 @@ async def delete_an_event(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     
     await crud_event.delete_event(db=db, event_to_delete=event)
+    
+
+# Enum untuk validasi parameter sorting
+class ImageSortBy(str, Enum):
+    created_at = "created_at"
+    file_name = "file_name"
+
+class SortOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
+
+
+@router.get("/{event_id}/images", response_model=pagination_schema.PaginatedResponse[image_schema.ImagePublic], summary="Get Images in an Event with Pagination")
+async def get_images_in_event(
+    event_id: int,
+    db: AsyncSession = Depends(deps.get_db_session),
+    # Parameter query dengan validasi dan nilai default
+    page: int = Query(1, gt=0, description="Halaman yang diminta"),
+    limit: int = Query(10, gt=0, le=50, description="Jumlah item per halaman (max: 50)"),
+    sort_by: ImageSortBy = Query(ImageSortBy.created_at, description="Field untuk sorting"),
+    sort_order: SortOrder = Query(SortOrder.desc, description="Urutan sorting"),
+    search: Optional[str] = Query(None, min_length=2, description="Keyword pencarian nama file"),
+    # Endpoint ini bisa diakses semua user yang login
+    current_user: UserModel = Depends(deps.get_current_active_user)
+):
+    """
+    Mengambil daftar gambar dari sebuah event dengan fitur lengkap:
+    - **Pagination**: `page` dan `limit`
+    - **Sorting**: `sort_by` (`created_at`, `file_name`) dan `sort_order` (`asc`, `desc`)
+    - **Searching**: `search` (berdasarkan nama file)
+    
+    Endpoint ini bisa digunakan untuk mengimplementasikan "infinite scroll" di Flutter.
+    """
+    # Verifikasi dulu apakah event-nya ada
+    event = await crud_event.get_event_by_id(db, event_id=event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    # TODO di masa depan: Tambahkan logika untuk memeriksa apakah user punya akses ke event ini (misal setelah memasukkan password)
+
+    # Panggil fungsi CRUD yang canggih
+    items, total_items = await crud_image.get_images_by_event_paginated(
+        db=db,
+        event_id=event_id,
+        page=page,
+        limit=limit,
+        sort_by=sort_by.value,
+        sort_order=sort_order.value,
+        search=search
+    )
+    
+    total_pages = math.ceil(total_items / limit)
+
+    return pagination_schema.PaginatedResponse(
+        total_items=total_items,
+        total_pages=total_pages,
+        current_page=page,
+        limit=limit,
+        items=items
+    )
