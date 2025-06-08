@@ -50,3 +50,17 @@ async def get_current_active_user(
     # if not current_user.is_active:
     #     raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+async def get_current_admin_user(
+    current_user: UserModel = Depends(get_current_active_user)
+) -> UserModel:
+    """
+    Dependensi untuk memeriksa apakah pengguna yang sedang login adalah seorang admin.
+    Jika bukan, akan melempar error 403 Forbidden.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have enough privileges"
+        )
+    return current_user
