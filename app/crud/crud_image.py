@@ -15,6 +15,18 @@ async def create_event_image(db: AsyncSession, *, file_name: str, url: str, even
     await db.refresh(db_image)
     return db_image
 
+async def get_image_with_event(db: AsyncSession, image_id: int) -> Optional[ImageModel]:
+    """
+    Mengambil sebuah gambar dan secara eksplisit memuat relasi 'event'-nya
+    untuk menghindari lazy loading saat otorisasi.
+    """
+    result = await db.execute(
+        select(ImageModel)
+        .options(selectinload(ImageModel.event)) # Eager load relasi 'event'
+        .filter(ImageModel.id == image_id)
+    )
+    return result.scalars().first()
+
 async def get_images_by_event_paginated(
     db: AsyncSession,
     *,

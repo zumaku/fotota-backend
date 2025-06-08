@@ -1,10 +1,12 @@
 # app/api/routers/event_router.py
 
+import os
 import uuid
 import math
+import aiofiles
 from enum import Enum
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.crud import crud_event, crud_image
@@ -149,7 +151,9 @@ async def delete_an_event(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     
     await crud_event.delete_event(db=db, event_to_delete=event)
-    
+
+
+# --------- Endpoints for Images ---------
 
 # Enum untuk validasi parameter sorting
 class ImageSortBy(str, Enum):
@@ -209,3 +213,50 @@ async def get_images_in_event(
         limit=limit,
         items=items
     )
+    
+@router.post("/{event_id}/images", response_model=List[image_schema.ImagePublic], status_code=status.HTTP_201_CREATED, summary="Upload Images to a Specific Event")
+async def upload_images_to_event(
+    event_id: int, # event_id sekarang diambil dari path URL
+    *,
+    db: AsyncSession = Depends(deps.get_db_session),
+    files: List[UploadFile] = File(...),
+    admin_user: UserModel = Depends(deps.get_current_admin_user)
+):
+    """
+    Mengunggah satu atau lebih foto ke sebuah event spesifik.
+    Endpoint ini menggantikan /images/upload yang lama.
+    """
+    event = await crud_event.get_event_by_id(db=db, event_id=event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    
+    if event.id_user != admin_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this event.")
+
+    event_photo_path = os.path.join("storage/events", str(event.id))
+    os.makedirs(event_photo_path, exist_ok=True)
+    
+    created_images = []
+    for file in files:
+        if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+            continue
+
+        file_extension = file.filename.split(".")[-1]
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path_on_disk = os.path.join(event_photo_path, unique_filename)
+        
+        async with aiofiles.open(file_path_on_disk, 'wb') as out_file:
+            content = await file.read()
+            await out_file.write(content)
+
+        public_url = f"{settings.API_BASE_URL}/media/events/{event.id}/{unique_filename}"
+        
+        db_image = await crud_image.create_event_image(
+            db=db, file_name=unique_filename, url=public_url, event_id=event.id
+        )
+        created_images.append(db_image)
+
+    if not created_images:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid image files were uploaded.")
+
+    return created_images
