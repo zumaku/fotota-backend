@@ -1,12 +1,12 @@
 # app/crud/crud_event.py
 
+from fastapi import HTTPException, status
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from fastapi import HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
-
-from app.db.models.event_model import Event as EventModel
+from sqlalchemy.orm import selectinload
+from app.db.models import Event as EventModel, User as UserModel
 from app.schemas.event_schema import EventCreate, EventUpdate
 from app.core.security import get_password_hash, verify_password
 
@@ -30,16 +30,36 @@ async def create_event(db: AsyncSession, *, event_in: EventCreate, owner_id: int
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error on event creation: {e}")
 
 async def get_events_by_owner(db: AsyncSession, *, owner_id: int) -> List[EventModel]:
-    result = await db.execute(select(EventModel).filter(EventModel.id_user == owner_id).order_by(EventModel.date.desc()))
+    result = await db.execute(
+        select(EventModel)
+        .options(selectinload(EventModel.images)) # <-- Eager load images
+        .filter(EventModel.id_user == owner_id)
+        .order_by(EventModel.date.desc())
+    )
     return result.scalars().all()
 
 async def get_event_by_id(db: AsyncSession, event_id: int) -> Optional[EventModel]:
-    return await db.get(EventModel, event_id)
+    result = await db.execute(
+        select(EventModel)
+        .options(
+            selectinload(EventModel.owner), # <-- Eager load owner
+            selectinload(EventModel.images) # <-- Eager load images
+        )
+        .filter(EventModel.id == event_id)
+    )
+    return result.scalars().first()
 
 async def search_events_by_name(db: AsyncSession, *, query: str) -> List[EventModel]:
-    """Mencari event berdasarkan nama secara case-insensitive."""
     search_query = f"%{query}%"
-    result = await db.execute(select(EventModel).filter(EventModel.name.ilike(search_query)).order_by(EventModel.date.desc()))
+    result = await db.execute(
+        select(EventModel)
+        .options(
+            selectinload(EventModel.owner), # <-- Eager load owner
+            selectinload(EventModel.images) # <-- Eager load images
+        )
+        .filter(EventModel.name.ilike(search_query))
+        .order_by(EventModel.date.desc())
+    )
     return result.scalars().all()
 
 async def update_event(db: AsyncSession, *, event_db_obj: EventModel, event_in: EventUpdate) -> EventModel:

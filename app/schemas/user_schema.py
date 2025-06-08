@@ -33,3 +33,12 @@ class UserPublic(UserBase):
 
     class Config:
         from_attributes = True
+        
+class UserInfo(BaseModel):
+    """Skema sederhana untuk menampilkan info pemilik event."""
+    id: int
+    name: Optional[str] = None
+    picture: Optional[str] = None
+
+    class Config:
+        from_attributes = True

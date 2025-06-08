@@ -1,8 +1,9 @@
 # app/schemas/event_schema.py
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+from .user_schema import UserInfo
 
 # Properti dasar untuk membuat atau menampilkan event
 class EventBase(BaseModel):
@@ -21,13 +22,27 @@ class EventUpdate(BaseModel):
     date: Optional[datetime] = None
     password: Optional[str] = Field(None, min_length=4) # Admin bisa ganti password
 
-# Skema yang dikembalikan ke client, tidak ada password
-class EventPublic(EventBase):
+class EventInDBBase(EventBase):
     id: int
-    link: Optional[str] = Field(None, example="https://fotota.app/event/unique-link-string")
-    id_user: int
+    link: Optional[str]
     created_at: datetime
     updated_at: datetime
+    images_preview: List[str] = [] # Field baru untuk preview gambar
 
     class Config:
         from_attributes = True
+
+# Skema yang dikembalikan ke client, tidak ada password
+class EventPublicDetail(EventInDBBase):
+    """
+    Tampilan detail sebuah event.
+    Mengembalikan objek 'owner' yang berisi info user.
+    """
+    owner: UserInfo # <-- Field baru berisi objek info user
+
+class EventPublicSummary(EventInDBBase):
+    """
+    Tampilan ringkas untuk daftar event.
+    Hanya mengembalikan 'id_user'.
+    """
+    id_user: int # <-- Hanya ID user, bukan objek lengkap

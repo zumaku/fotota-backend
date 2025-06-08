@@ -8,12 +8,24 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.crud import crud_event, crud_image
+from app.core.config import settings
 from app.db.models import User as UserModel, Event as EventModel
 from app.schemas import event_schema, pagination_schema, image_schema
 
 router = APIRouter()
 
-@router.post("", response_model=event_schema.EventPublic, status_code=status.HTTP_201_CREATED, summary="Create New Event")
+# --- Helper Function untuk Logika Berulang ---
+def get_image_previews(event: EventModel, limit: int = 4) -> List[str]:
+    """Membuat daftar URL preview gambar dari sebuah event."""
+    preview_urls = [image.url for image in event.images[:limit]]
+    placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.png"
+    while len(preview_urls) < limit:
+        preview_urls.append(placeholder_url)
+    return preview_urls
+
+# --- Endpoint Definitions ---
+
+@router.post("", response_model=event_schema.EventPublicDetail, status_code=status.HTTP_201_CREATED, summary="Create New Event")
 async def create_event(
     *,
     db: AsyncSession = Depends(deps.get_db_session),
@@ -30,9 +42,29 @@ async def create_event(
     unique_link = f"/events/{event.id}/{uuid.uuid4()}" # Contoh format link
     event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=unique_link))
     
-    return event_updated
+    # Karena event baru belum punya gambar, kita buat preview placeholder secara manual
+    placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.jpg"
+    images_preview = [placeholder_url] * 4
+    
+    # Kita perlu memuat relasi 'owner' secara eksplisit untuk ditampilkan di respons.
+    # Cara termudah adalah dengan memanggil kembali fungsi get_event_by_id yang sudah kita buat
+    # karena fungsi itu sudah dikonfigurasi untuk melakukan eager loading.
+    # Ini memastikan semua data yang dibutuhkan skema EventPublicDetail tersedia.
+    final_event_obj = await crud_event.get_event_by_id(db, event_id=event.id)
 
-@router.get("/search", response_model=List[event_schema.EventPublic], summary="Search for Events")
+    if not final_event_obj:
+        # Ini seharusnya tidak pernah terjadi, tapi sebagai pengaman
+        raise HTTPException(status_code=500, detail="Failed to fetch newly created event.")
+
+    # Gabungkan semuanya menjadi respons Pydantic
+    # Kita tidak bisa langsung 'return final_event_obj' karena kita perlu menyisipkan
+    # images_preview yang kita buat secara manual.
+    response_data = event_schema.EventPublicDetail.model_validate(final_event_obj, from_attributes=True)
+    response_data.images_preview = images_preview
+
+    return response_data
+
+@router.get("/search", response_model=List[event_schema.EventPublicDetail], summary="Search for Events")
 async def search_for_events(
     *,
     db: AsyncSession = Depends(deps.get_db_session),
@@ -43,9 +75,12 @@ async def search_for_events(
     """
     Mencari event berdasarkan nama.
     """
-    return await crud_event.search_events_by_name(db=db, query=q)
+    events = await crud_event.search_events_by_name(db=db, query=q)
+    for event in events:
+        event.images_preview = get_image_previews(event)
+    return events
 
-@router.get("/my-events", response_model=List[event_schema.EventPublic], summary="Get Events Created by Me")
+@router.get("/my-events", response_model=List[event_schema.EventPublicDetail], summary="Get Events Created by Me")
 async def get_my_created_events(
     db: AsyncSession = Depends(deps.get_db_session),
     admin_user: UserModel = Depends(deps.get_current_admin_user)
@@ -53,9 +88,12 @@ async def get_my_created_events(
     """
     Mengambil daftar semua event yang telah dibuat oleh admin yang sedang login.
     """
-    return await crud_event.get_events_by_owner(db=db, owner_id=admin_user.id)
+    events = await crud_event.get_events_by_owner(db=db, owner_id=admin_user.id)
+    for event in events:
+        event.images_preview = get_image_previews(event)
+    return events
 
-@router.get("/{event_id}", response_model=event_schema.EventPublic, summary="Get a Specific Event")
+@router.get("/{event_id}", response_model=event_schema.EventPublicDetail, summary="Get a Specific Event")
 async def get_event_details(
     event_id: int,
     db: AsyncSession = Depends(deps.get_db_session),
@@ -67,9 +105,11 @@ async def get_event_details(
     event = await crud_event.get_event_by_id(db, event_id=event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    
+    event.images_preview = get_image_previews(event)
     return event
 
-@router.put("/{event_id}", response_model=event_schema.EventPublic, summary="Update an Event")
+@router.put("/{event_id}", response_model=event_schema.EventPublicDetail, summary="Update an Event")
 async def update_an_event(
     event_id: int,
     *,
@@ -88,6 +128,7 @@ async def update_an_event(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     
     updated_event = await crud_event.update_event(db=db, event_db_obj=event, event_in=event_in)
+    updated_event.images_preview = get_image_previews(updated_event)
     return updated_event
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete an Event")
