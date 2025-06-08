@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.db.database import engine
-from app.db.models.user_model import Base # Base dari user_model jika tidak pakai base_class
+from app.db.models import Base # Base dari user_model jika tidak pakai base_class
 from app.api.routers import auth_router, user_router
 
 # Fungsi untuk event startup dan shutdown (misalnya membuat tabel DB)
