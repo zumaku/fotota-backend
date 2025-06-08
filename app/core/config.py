@@ -6,6 +6,8 @@ from typing import Optional
 class Settings(BaseSettings):
     PROJECT_NAME: str = "FastAPI Google Auth App"
     PROJECT_VERSION: str = "0.1.0"
+    
+    API_BASE_URL: str
 
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str

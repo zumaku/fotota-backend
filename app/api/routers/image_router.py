@@ -12,6 +12,7 @@ from app.api import deps
 from app.crud import crud_event, crud_image
 from app.db.models import User as UserModel, Image as ImageModel
 from app.schemas import image_schema
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -65,11 +66,11 @@ async def upload_images_to_event(
 
         # Buat URL publik yang akan digunakan oleh client
         # Path ini akan ditangani oleh StaticFiles di main.py
-        public_url = f"/media/events/{event.id}/{unique_filename}"
+        public_url = f"{settings.API_BASE_URL}/media/events/{event.id}/{unique_filename}"
         
         # Simpan metadata gambar ke database
         db_image = await crud_image.create_event_image(
-            db=db, file_name=file.filename, url=public_url, event_id=event.id
+            db=db, file_name=unique_filename, url=public_url, event_id=event.id
         )
         created_images.append(db_image)
 
