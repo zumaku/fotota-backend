@@ -29,9 +29,9 @@ async def login_via_google(
     google_refresh_token_from_provider: str | None = None # Refresh token DARI GOOGLE
     
     # --- DEBUGGING: Cek data dari client ---
-    print("\n--- DEBUG: REQUEST BODY YANG SEBENARNYA DARI FLUTTER ---")
-    print(request_data.model_dump_json(indent=2))
-    print("-------------------------------------------------------\n")
+    # print("\n--- DEBUG: REQUEST BODY YANG SEBENARNYA DARI FLUTTER ---")
+    # print(request_data.model_dump_json(indent=2))
+    # print("-------------------------------------------------------\n")
     # --- AKHIR DEBUGGING ---
 
     if request_data.server_auth_code:
@@ -92,18 +92,22 @@ async def login_via_google(
     # print("----------------------------------------\n")
     # --- AKHIR LANGKAH DEBUGGING ---
 
+    # --- Logika get/create user dengan ID Integer ---
     g_id = google_user_info["sub"]
     g_email = google_user_info["email"]
-    g_name = google_user_info.get("name") # Mengambil 'name'
-    g_picture = google_user_info.get("picture") # Mengambil 'picture'
+    g_name = google_user_info.get("name")
+    g_picture = google_user_info.get("picture")
 
     user = await crud_user.get_user_by_google_id(db, google_id=g_id)
     if not user:
+        # Cek lagi via email, mungkin user pernah daftar dengan cara lain di masa depan
         user = await crud_user.get_user_by_email(db, email=g_email)
         if user:
+            # User ditemukan via email, tautkan akun Google-nya
             update_data = {"google_id": g_id, "name": g_name, "picture": g_picture}
             user = await crud_user.update_user(db, user=user, data_to_update=update_data)
         else:
+            # Buat user baru. ID akan dibuat otomatis oleh database.
             user_in_create = user_schema.UserCreateGoogle(
                 email=g_email,
                 name=g_name, # Memastikan 'name' yang sudah diekstrak dimasukkan
@@ -113,7 +117,7 @@ async def login_via_google(
             )
             
             # --- DEBUGGING: Membuat user baru ---
-            print(f"DEBUG ROUTER: Membuat user baru dengan data: {user_in_create.model_dump_json(indent=2)}")
+            # print(f"DEBUG ROUTER: Membuat user baru dengan data: {user_in_create.model_dump_json(indent=2)}")
             # --- AKHIR DEBUGGING ---
             
             user = await crud_user.create_google_user(db, user_in=user_in_create)
