@@ -42,6 +42,18 @@ app.include_router(image_router.router, prefix="/api/v1/images", tags=["Images"]
 app.include_router(activity_router.router, prefix="/api/v1/activity", tags=["Activity"])
 app.include_router(fotota_router.router, prefix="/api/v1/fotota", tags=["Fotota"])
 
+@app.get('/api/v1', tags=["Welcome"])
+async def welcome_message():
+    """
+    Endpoint selamat datang untuk API FotoTa.
+    Memberikan informasi dasar tentang API.
+    """
+    return {
+        "message": f"Welcome to the {settings.PROJECT_NAME} API!",
+        "version": settings.PROJECT_VERSION,
+        "documentation_url": "/api/v1/docs"
+    }
+
 @app.get("/api/v1/health", tags=["Health"])
 async def health_check():
     return {"status": "healthy", "project": settings.PROJECT_NAME, "version": settings.PROJECT_VERSION}
