@@ -10,12 +10,12 @@ from app.api import deps
 from app.db.models.user_model import User as UserModel
 from app.schemas import user_schema
 from app.crud import crud_user
+from app.core.config import settings
 
 # Tentukan path di mana Anda ingin menyimpan foto selfie di VM Anda
 # Pastikan direktori ini ada dan FastAPI memiliki izin untuk menulis di sana.
 # Contoh: /var/www/fotota/storage/selfies
-# SELFIE_STORAGE_PATH = "storage/selfies"   # Jika pakai Nginx
-SELFIE_STORAGE_PATH = "./storage/selfies" 
+SELFIE_STORAGE_PATH = "storage/selfies"   # Jika pakai Nginx
 os.makedirs(SELFIE_STORAGE_PATH, exist_ok=True) # Buat direktori jika belum ada
 
 router = APIRouter()
@@ -72,9 +72,9 @@ async def upload_or_update_selfie(
     # 5. Update path file di database
     # Di sini kita hanya menyimpan path lokal. Untuk URL publik, Anda perlu logika tambahan
     # yang menggabungkan base URL Nginx Anda, contoh:
-    # public_url = f"http://your_domain.com/media/selfies/{unique_filename}"
+    public_url = f"{settings.API_BASE_URL}/media/selfies/{unique_filename}"
     updated_user = await crud_user.update_user(
-        db, user=current_user, data_to_update={"selfie": file_path}
+        db, user=current_user, data_to_update={"selfie": public_url}
     )
 
     return updated_user
