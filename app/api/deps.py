@@ -3,7 +3,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError
-
+from fastapi import Path
 from app.core import security
 from app.core.config import settings
 from app.db.database import get_db_session # Diganti dari database.py
@@ -64,3 +64,31 @@ async def get_current_admin_user(
             detail="The user doesn't have enough privileges"
         )
     return current_user
+
+async def get_event_access_payload(
+    event_id: int = Path(...), # Ambil event_id dari path URL
+    token: str = Depends(reusable_oauth2) # Ambil token dari header Authorization
+) -> TokenPayload:
+    """
+    Dependensi untuk melindungi endpoint galeri.
+    Memastikan token yang diberikan adalah Event Access Token yang valid
+    untuk event_id yang spesifik.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, # 403 Forbidden lebih cocok daripada 401
+        detail="You do not have access to this event gallery",
+    )
+    
+    # Verifikasi token menggunakan secret key khusus event
+    payload = security.verify_jwt_token(token, settings.JWT_EVENT_SECRET_KEY)
+    
+    # Ekstrak klaim dari payload
+    # Kita akan menyimpan 'type' dan 'event_id' di dalam token
+    token_type = payload.type if payload else None
+    token_event_id = payload.event_id if payload else None
+
+    # Lakukan validasi
+    if not payload or token_type != "event_access" or token_event_id != event_id:
+        raise credentials_exception
+    
+    return payload

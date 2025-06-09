@@ -4,15 +4,16 @@ import os
 import uuid
 import math
 import aiofiles
-from enum import Enum
 from typing import Optional, List
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
-from app.crud import crud_event, crud_image
+from app.crud import crud_event, crud_image, crud_activity
+from app.core import security
 from app.core.config import settings
 from app.db.models import User as UserModel, Event as EventModel
-from app.schemas import event_schema, pagination_schema, image_schema
+from app.schemas import event_schema, pagination_schema, image_schema, token_schema
 
 IMAGES_STORAGE_PATH = "storage/events"
 os.makedirs(IMAGES_STORAGE_PATH, exist_ok=True)
@@ -156,32 +157,53 @@ async def delete_an_event(
     await crud_event.delete_event(db=db, event_to_delete=event)
 
 
-# --------- Endpoints for Images ---------
+@router.post("/{event_id}/access", response_model=event_schema.EventAccessToken, summary="Get Event Access Token")
+async def get_event_access_token(
+    event_id: int,
+    request_data: event_schema.EventAccessRequest,
+    db: AsyncSession = Depends(deps.get_db_session),
+    current_user: UserModel = Depends(deps.get_current_active_user)
+):
+    """
+    Memverifikasi password event.
+    Jika berhasil, kembalikan sebuah Event Access Token (EAT) yang berumur pendek.
+    """
+    event = await crud_event.get_event_by_id(db, event_id=event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
 
-# Enum untuk validasi parameter sorting
-class ImageSortBy(str, Enum):
-    created_at = "created_at"
-    file_name = "file_name"
+    if not security.verify_password(request_data.password, event.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password")
 
-class SortOrder(str, Enum):
-    asc = "asc"
-    desc = "desc"
+    await crud_activity.log_user_activity(db=db, user_id=current_user.id, event_id=event.id)
+
+    # Buat Event Access Token (EAT) yang berlaku 2 jam
+    expires_delta = timedelta(hours=2)
+    # Payload berisi klaim spesifik untuk akses event ini
+    additional_claims = {"type": "event_access", "event_id": event.id}
+    eat = security.create_jwt_token(
+        subject=current_user.id,
+        expires_delta=expires_delta,
+        secret_key=settings.JWT_EVENT_SECRET_KEY,
+        additional_claims=additional_claims
+    )
+    
+    return event_schema.EventAccessToken(event_access_token=eat)
 
 
 @router.get("/{event_id}/images", response_model=pagination_schema.PaginatedResponse[image_schema.ImagePublic], summary="Get Images in an Event with Pagination")
 async def get_images_in_event(
-    event_id: int,
     db: AsyncSession = Depends(deps.get_db_session),
     # Parameter query dengan validasi dan nilai default
     page: int = Query(1, gt=0, description="Halaman yang diminta"),
     limit: int = Query(10, gt=0, le=50, description="Jumlah item per halaman (max: 50)"),
-    sort_by: ImageSortBy = Query(ImageSortBy.created_at, description="Field untuk sorting"),
-    sort_order: SortOrder = Query(SortOrder.desc, description="Urutan sorting"),
-    search: Optional[str] = Query(None, min_length=2, description="Keyword pencarian nama file"),
-    # Endpoint ini bisa diakses semua user yang login
-    current_user: UserModel = Depends(deps.get_current_active_user)
+    sort_by: image_schema.ImageSortBy = Query(image_schema.ImageSortBy.created_at, description="Field untuk sorting"),
+    sort_order: image_schema.SortOrder = Query(image_schema.SortOrder.desc, description="Urutan sorting"),
+    event_payload: token_schema.TokenPayload = Depends(deps.get_event_access_payload)
 ):
     """
+    [ WAJIB menggunakan Event Access Token (EAT) yang didapat dari endpoint /access! ]
+    
     Mengambil daftar gambar dari sebuah event dengan fitur lengkap:
     - **Pagination**: `page` dan `limit`
     - **Sorting**: `sort_by` (`created_at`, `file_name`) dan `sort_order` (`asc`, `desc`)
@@ -189,32 +211,29 @@ async def get_images_in_event(
     
     Endpoint ini bisa digunakan untuk mengimplementasikan "infinite scroll" di Flutter.
     """
+    
+    # Karena dependensi sudah memvalidasi, kita bisa langsung lanjut
+    event_id = event_payload.event_id
+    
     # Verifikasi dulu apakah event-nya ada
     event = await crud_event.get_event_by_id(db, event_id=event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
         
     # TODO di masa depan: Tambahkan logika untuk memeriksa apakah user punya akses ke event ini (misal setelah memasukkan password)
+    # DONE
 
     # Panggil fungsi CRUD yang canggih
     items, total_items = await crud_image.get_images_by_event_paginated(
         db=db,
         event_id=event_id,
-        page=page,
-        limit=limit,
-        sort_by=sort_by.value,
-        sort_order=sort_order.value,
-        search=search
+        page=page, limit=limit, sort_by="created_at", sort_order="desc"
     )
     
     total_pages = math.ceil(total_items / limit)
 
     return pagination_schema.PaginatedResponse(
-        total_items=total_items,
-        total_pages=total_pages,
-        current_page=page,
-        limit=limit,
-        items=items
+        total_items=total_items, total_pages=total_pages, current_page=page, limit=limit, items=items
     )
     
 @router.post("/{event_id}/images", response_model=List[image_schema.ImagePublic], status_code=status.HTTP_201_CREATED, summary="Upload Images to a Specific Event")

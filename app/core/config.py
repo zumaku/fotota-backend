@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     JWT_SECRET_KEY: str
     JWT_REFRESH_SECRET_KEY: str
+    JWT_EVENT_SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7

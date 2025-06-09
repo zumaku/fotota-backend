@@ -35,7 +35,7 @@ async def get_images_by_event_paginated(
     limit: int,
     sort_by: str,
     sort_order: str,
-    search: Optional[str]
+    # search: Optional[str]
 ) -> Tuple[List[ImageModel], int]:
     """
     Mengambil gambar dari event tertentu dengan pagination, sorting, dan search.
@@ -45,9 +45,9 @@ async def get_images_by_event_paginated(
     query = select(ImageModel).filter(ImageModel.id_event == event_id)
 
     # 2. Tambahkan filter pencarian jika ada
-    if search:
-        # Menggunakan ilike untuk pencarian case-insensitive
-        query = query.filter(ImageModel.file_name.ilike(f"%{search}%"))
+    # if search:
+    #     # Menggunakan ilike untuk pencarian case-insensitive
+    #     query = query.filter(ImageModel.file_name.ilike(f"%{search}%"))
 
     # 3. Hitung jumlah total item SEBELUM pagination untuk metadata
     count_query = select(func.count()).select_from(query.subquery())

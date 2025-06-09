@@ -8,9 +8,8 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: str = Field(..., description="Subject of the token (usually user ID or email)")
-    # Anda bisa tambahkan klaim lain jika perlu, misalnya 'exp', 'iat', 'jti'
-    # exp: Optional[int] = None
-    # type: Optional[str] = None # Untuk membedakan access dan refresh token jika perlu
+    type: Optional[str] = None      # Untuk membedakan tipe token, misal 'event_access'
+    event_id: Optional[int] = None  # Untuk menyimpan ID event di dalam token
 
 class GoogleLoginRequest(BaseModel):
     # Client akan mengirim salah satu dari ini:

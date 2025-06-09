@@ -22,6 +22,18 @@ class EventUpdate(BaseModel):
     date: Optional[datetime] = None
     password: Optional[str] = Field(None, min_length=4) # Admin bisa ganti password
 
+# Skema baru untuk password event
+class EventAccessRequest(BaseModel):
+    password: str = Field(..., example="PasswordEventRahasia")
+    
+# SKEMA BARU UNTUK RESPONS TOKEN EVENT
+class EventAccessToken(BaseModel):
+    event_access_token: str
+    token_type: str = "bearer"
+    
+
+# ----------------------------------
+
 class EventInDBBase(EventBase):
     id: int
     link: Optional[str]
