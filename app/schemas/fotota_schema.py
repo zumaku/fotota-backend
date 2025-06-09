@@ -9,8 +9,8 @@ from datetime import datetime
 from .image_schema import ImagePublic
 
 # Skema untuk request body saat membuat bookmark baru
-class FototaCreate(BaseModel):
-    image_id: int = Field(..., description="ID dari gambar yang ingin di-bookmark")
+class FototaBulkCreate(BaseModel):
+    image_ids: List[int] = Field(..., description="Daftar ID dari gambar yang ingin di-bookmark")
 
 # Skema untuk menampilkan satu record bookmark (termasuk detail gambarnya)
 class FototaPublic(BaseModel):
