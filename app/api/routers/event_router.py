@@ -14,6 +14,9 @@ from app.core.config import settings
 from app.db.models import User as UserModel, Event as EventModel
 from app.schemas import event_schema, pagination_schema, image_schema
 
+IMAGES_STORAGE_PATH = "storage/events"
+os.makedirs(IMAGES_STORAGE_PATH, exist_ok=True)
+
 router = APIRouter()
 
 # --- Helper Function untuk Logika Berulang ---
@@ -233,7 +236,7 @@ async def upload_images_to_event(
     if event.id_user != admin_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this event.")
 
-    event_photo_path = os.path.join("storage/events", str(event.id))
+    event_photo_path = os.path.join(IMAGES_STORAGE_PATH, str(event.id))
     os.makedirs(event_photo_path, exist_ok=True)
     
     created_images = []
