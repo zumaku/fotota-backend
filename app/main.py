@@ -1,18 +1,14 @@
-import logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.core.config import settings
+from app.core.logging_config import setup_logging
 from app.db.database import engine
 from app.db.models import Base # Base dari user_model jika tidak pakai base_class
 from app.api.routers import auth_router, user_router, event_router, image_router, activity_router, fotota_router
 
-# Atur konfigurasi dasar untuk semua logger di aplikasi.
-logging.basicConfig(
-    level=logging.INFO, # Atur level minimum yang akan ditampilkan
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Setup Logging
+setup_logging()
 
 # Fungsi untuk event startup dan shutdown (misalnya membuat tabel DB)
 @asynccontextmanager
@@ -66,4 +62,4 @@ async def welcome_message():
 async def health_check():
     return {"status": "healthy", "project": settings.PROJECT_NAME, "version": settings.PROJECT_VERSION}
 
-# Untuk menjalankan: uvicorn app.main:app --reload --port 8000
+# Untuk menjalankan: uvicorn app.main:app  --port 8000 --reload --log-config .\log_config.yaml
