@@ -54,7 +54,8 @@ async def create_event(
     event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=unique_link))
     
     # Langsung buat folder event di storage
-    event_folder_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event_updated.id))
+    # event_folder_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event_updated.id))
+    event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_updated.id}"
     os.makedirs(event_folder_path, exist_ok=True)
     logger.info(f"Created storage directory for event {event_updated.id} at {event_folder_path}")
     
@@ -266,7 +267,7 @@ async def upload_images_to_event(
     if event.id_user != admin_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this event.")
 
-    event_photo_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event.id))
+    event_photo_path = f"{settings.EVENT_STORAGE_PATH}/{event.id}"
 
     created_images = []
     for file in files:
