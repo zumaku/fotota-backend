@@ -283,12 +283,12 @@ async def upload_images_to_event(
 
     return created_images
 
-@router.get("/{event_id}/find-my-face", response_model=event_schema.FaceSearchResponse, summary="Find My Photos in an Event")
+@router.get("/{event_id}/find-my-face", response_model=List[image_schema.MatchedImageResult], summary="Find My Photos in an Event")
 async def find_my_face_in_event(
     event_id: int,
     db: AsyncSession = Depends(deps.get_db_session),
     current_user: UserModel = Depends(deps.get_current_active_user)
-):
+):  
     """
     Memulai proses pencarian wajah pengguna di semua foto dalam sebuah event.
     Membutuhkan pengguna untuk sudah mengunggah foto selfie.
@@ -307,11 +307,45 @@ async def find_my_face_in_event(
 
     # 3. Tentukan path folder event di disk
     event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_id}"
-
-    # 4. Panggil service untuk melakukan pekerjaan berat
-    matched_urls = await face_recognition_service.find_matching_faces(
+    
+    # 4. Dapatkan hasil mentah dari service (path disk + koordinat)
+    raw_matches = await face_recognition_service.find_matching_faces(
         source_image_url=current_user.selfie,
         event_storage_path=event_folder_path
     )
+    
+    if not raw_matches:
+        return [] # Kembalikan list kosong jika tidak ada yang cocok
 
-    return event_schema.FaceSearchResponse(matched_image_urls=matched_urls)
+    # 5. Ubah path disk kembali menjadi URL publik untuk dicari di database
+    matched_urls = [
+        path.replace("storage/", f"{settings.API_BASE_URL}/media/", 1) 
+        for path in [match["disk_path"] for match in raw_matches]
+    ]
+
+    # 6. Ambil semua objek Image dari database dalam satu query yang efisien
+    image_objects = await crud_image.get_images_by_urls(db, urls=matched_urls)
+    
+    # 7. Buat lookup dictionary untuk akses cepat: url -> ImageObject
+    image_map = {image.url: image for image in image_objects}
+    
+    # 8. Gabungkan semua data menjadi respons akhir
+    matched_images = []
+    for match in raw_matches:
+        public_url = match["disk_path"].replace("storage/", f"{settings.API_BASE_URL}/media/", 1)
+        image_obj = image_map.get(public_url)
+        
+        if image_obj:
+            # Buat sebuah DICTIONARY Python, bukan objek Pydantic
+            result_item = {
+                "id": image_obj.id,
+                "file_name": image_obj.file_name,
+                "url": image_obj.url,
+                "id_event": image_obj.id_event,
+                "created_at": image_obj.created_at,
+                "face": match["face_coords"]
+            }
+            matched_images.append(result_item)
+            
+    # Kembalikan sebuah list of dictionaries
+    return matched_images

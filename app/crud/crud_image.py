@@ -72,3 +72,16 @@ async def get_images_by_event_paginated(
     items = items_result.scalars().all()
 
     return items, total_items
+
+async def get_images_by_urls(db: AsyncSession, *, urls: List[str]) -> List[ImageModel]:
+    """
+    Mengambil beberapa objek gambar dari database secara efisien
+    berdasarkan daftar URL publiknya.
+    """
+    if not urls:
+        # Kembalikan list kosong jika tidak ada URL yang dicari untuk menghindari query yang tidak perlu
+        return []
+        
+    query = select(ImageModel).filter(ImageModel.url.in_(urls))
+    result = await db.execute(query)
+    return result.scalars().all()

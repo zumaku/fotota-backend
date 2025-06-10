@@ -1,7 +1,7 @@
 # app/services/face_recognition_service.py
 
 import pandas as pd
-from typing import List
+from typing import List, Dict, Any
 from deepface import DeepFace
 from fastapi.concurrency import run_in_threadpool
 
@@ -19,7 +19,7 @@ def convert_public_url_to_local_path(url: str) -> str:
 async def find_matching_faces(
     source_image_url: str,
     event_storage_path: str # Path ke folder event, cth: storage/events/12
-) -> List[str]:
+) -> List[Dict[str, Any]]:
     """
     Menjalankan DeepFace.find di thread terpisah untuk mencari wajah yang cocok.
     Mengembalikan daftar URL publik dari gambar yang cocok.
@@ -48,16 +48,26 @@ async def find_matching_faces(
 
         # Filter hasil untuk mendapatkan path file yang cocok
         # 'identity' adalah path ke file yang ditemukan di db_path
-        matched_file_paths = result_df["identity"].tolist()
-
-        # Ubah kembali path disk lokal menjadi URL publik
-        # cth: storage/events/12/foto.jpg -> http://.../media/events/12/foto.jpg
-        matched_urls = [
-            path.replace("storage/", f"{settings.API_BASE_URL}/media/", 1).replace("\\", "/")
-            for path in matched_file_paths
-        ]
+        # Jika tidak ada kolom 'identity' atau kosong, kembalikan list kosong
+        if "identity" not in result_df.columns or result_df.empty:
+            return []
         
-        return matched_urls
+        # Ekstrak data lengkap dari DataFrame
+        results = []
+        for index, row in result_df.iterrows():
+            # 'identity' adalah path disk ke gambar yang cocok
+            # 'target_x', 'target_y', 'target_w', 'target_h' adalah koordinatnya
+            results.append({
+                "disk_path": row["identity"].replace("\\", "/"), # Normalisasi path separator
+                "face_coords": {
+                    "x": row["target_x"],
+                    "y": row["target_y"],
+                    "w": row["target_w"],
+                    "h": row["target_h"],
+                }
+            })
+        
+        return results
 
     except Exception as e:
         # Tangani error jika DeepFace gagal atau folder tidak ada

@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from .user_schema import UserInfo
+from .image_schema import MatchedImageResult
 
 # Properti dasar untuk membuat atau menampilkan event
 class EventBase(BaseModel):
@@ -62,4 +63,4 @@ class EventPublicSummary(EventInDBBase):
 # ----------------------------------
 
 class FaceSearchResponse(BaseModel):
-    matched_image_urls: List[str]
+    matched_images: List[MatchedImageResult]
