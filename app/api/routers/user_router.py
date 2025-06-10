@@ -15,8 +15,7 @@ from app.core.config import settings
 # Tentukan path di mana Anda ingin menyimpan foto selfie di VM Anda
 # Pastikan direktori ini ada dan FastAPI memiliki izin untuk menulis di sana.
 # Contoh: /var/www/fotota/storage/selfies
-SELFIE_STORAGE_PATH = "storage/selfies"   # Jika pakai Nginx
-os.makedirs(SELFIE_STORAGE_PATH, exist_ok=True) # Buat direktori jika belum ada
+os.makedirs(settings.SELFIE_STORAGE_PATH, exist_ok=True) # Buat direktori jika belum ada
 
 router = APIRouter()
 

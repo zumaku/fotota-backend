@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
+    SELFIE_STORAGE_PATH: str
+    EVENT_STORAGE_PATH: str
+    
     TF_ENABLE_ONEDNN_OPTS: int = 0
 
     # Opsional: Client ID Google untuk Android/iOS jika perlu validasi audience token Google

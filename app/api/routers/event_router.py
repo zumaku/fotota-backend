@@ -16,8 +16,7 @@ from app.db.models import User as UserModel, Event as EventModel
 from app.schemas import event_schema, pagination_schema, image_schema, token_schema
 from app.services import face_recognition_service
 
-EVENT_STORAGE_PATH = "storage/events"
-os.makedirs(EVENT_STORAGE_PATH, exist_ok=True)
+os.makedirs(settings.EVENT_STORAGE_PATH, exist_ok=True)
 
 router = APIRouter()
 
@@ -256,7 +255,7 @@ async def upload_images_to_event(
     if event.id_user != admin_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this event.")
 
-    event_photo_path = os.path.join(EVENT_STORAGE_PATH, str(event.id))
+    event_photo_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event.id))
     os.makedirs(event_photo_path, exist_ok=True)
     
     created_images = []
@@ -307,7 +306,7 @@ async def find_my_face_in_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
 
     # 3. Tentukan path folder event di disk
-    event_folder_path = f"{EVENT_STORAGE_PATH}/{event_id}"
+    event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_id}"
 
     # 4. Panggil service untuk melakukan pekerjaan berat
     matched_urls = await face_recognition_service.find_matching_faces(
