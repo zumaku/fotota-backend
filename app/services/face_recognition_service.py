@@ -1,11 +1,14 @@
 # app/services/face_recognition_service.py
 
 import os
+import logging
 from typing import List, Dict, Any
 from deepface import DeepFace
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 def pre_calculate_event_embeddings(event_storage_path: str):
     """
@@ -17,13 +20,13 @@ def pre_calculate_event_embeddings(event_storage_path: str):
         # Kita bisa ambil gambar pertama secara acak.
         images_in_folder = [f for f in os.listdir(event_storage_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
         if not images_in_folder:
-            print(f"BACKGROUND TASK: No images in {event_storage_path} to build index from.")
+            logger.error(f"BACKGROUND TASK: No images in {event_storage_path} to build index from.", exc_info=True)
             return
 
         # Ambil satu gambar sebagai pemicu
         trigger_image_path = os.path.join(event_storage_path, images_in_folder[0])
 
-        print(f"BACKGROUND TASK: Starting to build face database for {event_storage_path}...")
+        logger.info(f"BACKGROUND TASK: Starting to build face database for {event_storage_path}...")
         
         # Panggilan ini akan secara otomatis membuat atau memperbarui file .pkl
         # Kita tidak perlu menyimpan hasilnya, kita hanya butuh prosesnya berjalan.
@@ -34,11 +37,11 @@ def pre_calculate_event_embeddings(event_storage_path: str):
             enforce_detection=False
         )
         
-        print(f"BACKGROUND TASK: Face database for {event_storage_path} is ready.")
+        logger.info(f"BACKGROUND TASK: Face database for {event_storage_path} is ready.")
 
     except Exception as e:
         # Penting untuk mencatat error jika terjadi di background
-        print(f"BACKGROUND TASK FAILED for {event_storage_path}. Error: {e}")
+        logger.error(f"BACKGROUND TASK FAILED for {event_storage_path}. Error: {e}", exc_info=True)
 
 def convert_public_url_to_local_path(url: str) -> str:
     """Mengubah URL publik kembali menjadi path disk lokal."""
