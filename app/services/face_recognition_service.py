@@ -1,6 +1,7 @@
 # app/services/face_recognition_service.py
 
 import os
+import time
 import logging
 from typing import List, Dict, Any
 from deepface import DeepFace
@@ -16,9 +17,13 @@ def pre_calculate_event_embeddings(event_storage_path: str):
     Tugasnya adalah memindai folder event untuk membuat file cache .pkl.
     """
     try:
+        # Beri jeda 2 detik untuk memastikan semua file sudah selesai ditulis ke disk oleh OS.
+        logger.info(f"BACKGROUND TASK: Waiting 2 seconds for file system to sync for event path: {event_storage_path}")
+        time.sleep(2)
+        
         # Kita perlu setidaknya satu gambar di dalam folder untuk dijadikan 'img_path'
         # Kita bisa ambil gambar pertama secara acak.
-        images_in_folder = [f for f in os.listdir(event_storage_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
+        images_in_folder = [f for f in os.listdir(event_storage_path) if f.endswith(('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'))]
         if not images_in_folder:
             logger.error(f"BACKGROUND TASK: No images in {event_storage_path} to build index from.", exc_info=True)
             return
