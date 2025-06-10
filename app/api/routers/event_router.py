@@ -6,7 +6,7 @@ import math
 import aiofiles
 from typing import Optional, List
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.crud import crud_event, crud_image, crud_activity
@@ -240,6 +240,7 @@ async def get_images_in_event(
 async def upload_images_to_event(
     event_id: int, # event_id sekarang diambil dari path URL
     *,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(deps.get_db_session),
     files: List[UploadFile] = File(...),
     admin_user: UserModel = Depends(deps.get_current_admin_user)
@@ -280,6 +281,15 @@ async def upload_images_to_event(
 
     if not created_images:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid image files were uploaded.")
+
+    # TAMBAHKAN TUGAS KE BACKGROUND
+    # Daftarkan fungsi 'pekerja' untuk dijalankan setelah respons ini dikirim.
+    # Kita berikan path absolut ke folder event sebagai argumen.
+    background_tasks.add_task(
+        face_recognition_service.pre_calculate_event_embeddings,
+        event_storage_path=str(event_photo_path)
+    )
+    print(f"INFO: {len(created_images)} files uploaded. Indexing task scheduled for event {event_id}.")
 
     return created_images
 
