@@ -3,6 +3,7 @@
 import os
 import uuid
 import math
+import logging
 import aiofiles
 from typing import Optional, List
 from datetime import timedelta
@@ -15,6 +16,8 @@ from app.core.config import settings
 from app.db.models import User as UserModel, Event as EventModel
 from app.schemas import event_schema, pagination_schema, image_schema, token_schema
 from app.services import face_recognition_service
+
+logger = logging.getLogger(__name__)
 
 os.makedirs(settings.EVENT_STORAGE_PATH, exist_ok=True)
 
@@ -42,11 +45,18 @@ async def create_event(
     Membuat sebuah "folder" event baru. Hanya bisa diakses oleh admin.
     Upload foto dilakukan di endpoint terpisah.
     """
+    
+    # Buat event di database
     event = await crud_event.create_event(db=db, event_in=event_in, owner_id=admin_user.id)
     
     # Generate link unik setelah event dibuat dan memiliki ID
     unique_link = f"/events/{event.id}/{uuid.uuid4()}" # Contoh format link
     event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=unique_link))
+    
+    # Langsung buat folder event di storage
+    event_folder_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event_updated.id))
+    os.makedirs(event_folder_path, exist_ok=True)
+    logger.info(f"Created storage directory for event {event_updated.id} at {event_folder_path}")
     
     # Karena event baru belum punya gambar, kita buat preview placeholder secara manual
     placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.jpg"
@@ -257,8 +267,7 @@ async def upload_images_to_event(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this event.")
 
     event_photo_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event.id))
-    os.makedirs(event_photo_path, exist_ok=True)
-    
+
     created_images = []
     for file in files:
         if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
