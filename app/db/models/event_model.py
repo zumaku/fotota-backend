@@ -1,6 +1,6 @@
 # app/db/models/event_model.py
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, BigInteger, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, Text, BigInteger, Boolean, ForeignKey, func
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
@@ -17,6 +17,8 @@ class Event(Base):
     
     # DIUBAH: Foreign Key ke users.id sekarang adalah Integer
     id_user = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    indexed_by_robota = Column(Boolean, default=False, nullable=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

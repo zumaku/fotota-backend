@@ -87,3 +87,12 @@ async def update_event(db: AsyncSession, *, event_db_obj: EventModel, event_in: 
 async def delete_event(db: AsyncSession, event_to_delete: EventModel):
     await db.delete(event_to_delete)
     await db.commit()
+    
+async def set_event_indexed_status(db: AsyncSession, *, event_id: int, status: bool) -> EventModel:
+    """Mengubah status 'indexed_by_robota' untuk sebuah event."""
+    db_event = await db.get(EventModel, event_id)
+    if db_event:
+        db_event.indexed_by_robota = status
+        await db.commit()
+        await db.refresh(db_event)
+    return db_event

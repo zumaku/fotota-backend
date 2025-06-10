@@ -292,11 +292,15 @@ async def upload_images_to_event(
     if not created_images:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid image files were uploaded.")
 
+    # Set status kembali ke False, karena ada gambar baru yang butuh di-indeks ulang
+    await crud_event.set_event_indexed_status(db, event_id=event_id, status=False)
+    
     # TAMBAHKAN TUGAS KE BACKGROUND
     # Daftarkan fungsi 'pekerja' untuk dijalankan setelah respons ini dikirim.
     # Kita berikan path absolut ke folder event sebagai argumen.
     background_tasks.add_task(
-        face_recognition_service.pre_calculate_event_embeddings,
+        face_recognition_service.process_event_images_and_update_status,
+        event_id=event_id,
         event_storage_path=str(event_photo_path)
     )
     print(f"INFO: {len(created_images)} files uploaded. Indexing task scheduled for event {event_id}.")
@@ -324,6 +328,13 @@ async def find_my_face_in_event(
     event = await crud_event.get_event_by_id(db, event_id=event_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    
+    # Pengecekan status indexed by robota
+    if not event.indexed_by_robota:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Event is currently being indexed. Please try again in a few moments."
+        )
 
     # 3. Tentukan path folder event di disk
     event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_id}"

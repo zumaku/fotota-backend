@@ -38,6 +38,7 @@ class EventAccessToken(BaseModel):
 class EventInDBBase(EventBase):
     id: int
     link: Optional[str]
+    indexed_by_robota: bool
     created_at: datetime
     updated_at: datetime
     images_preview: List[str] = [] # Field baru untuk preview gambar

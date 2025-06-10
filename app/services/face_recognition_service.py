@@ -2,51 +2,16 @@
 
 import os
 import time
+import asyncio
 import logging
 from typing import List, Dict, Any
 from deepface import DeepFace
 from fastapi.concurrency import run_in_threadpool
-
+from app.crud import crud_event
 from app.core.config import settings
+from app.db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
-
-def pre_calculate_event_embeddings(event_storage_path: str):
-    """
-    Fungsi 'pekerja' sinkron yang akan berjalan di background.
-    Tugasnya adalah memindai folder event untuk membuat file cache .pkl.
-    """
-    try:
-        # Beri jeda 2 detik untuk memastikan semua file sudah selesai ditulis ke disk oleh OS.
-        logger.info(f"BACKGROUND TASK: Waiting 2 seconds for file system to sync for event path: {event_storage_path}")
-        time.sleep(2)
-        
-        # Kita perlu setidaknya satu gambar di dalam folder untuk dijadikan 'img_path'
-        # Kita bisa ambil gambar pertama secara acak.
-        images_in_folder = [f for f in os.listdir(event_storage_path) if f.endswith(('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'))]
-        if not images_in_folder:
-            logger.error(f"BACKGROUND TASK: No images in {event_storage_path} to build index from.", exc_info=True)
-            return
-
-        # Ambil satu gambar sebagai pemicu
-        trigger_image_path = os.path.join(event_storage_path, images_in_folder[0])
-
-        logger.info(f"BACKGROUND TASK: Starting to build face database for {event_storage_path}...")
-        
-        # Panggilan ini akan secara otomatis membuat atau memperbarui file .pkl
-        # Kita tidak perlu menyimpan hasilnya, kita hanya butuh prosesnya berjalan.
-        _ = DeepFace.find(
-            img_path=trigger_image_path,
-            db_path=event_storage_path,
-            model_name=settings.MODEL_NAME,
-            enforce_detection=False
-        )
-        
-        logger.info(f"BACKGROUND TASK: Face database for {event_storage_path} is ready.")
-
-    except Exception as e:
-        # Penting untuk mencatat error jika terjadi di background
-        logger.error(f"BACKGROUND TASK FAILED for {event_storage_path}. Error: {e}", exc_info=True)
 
 def convert_public_url_to_local_path(url: str) -> str:
     """Mengubah URL publik kembali menjadi path disk lokal."""
@@ -114,3 +79,55 @@ async def find_matching_faces(
         # Tangani error jika DeepFace gagal atau folder tidak ada
         print(f"DeepFace Error: {e}")
         return []
+
+def _blocking_deepface_call(source_path: str, db_path: str):
+    """
+    Fungsi pembungkus sinkron untuk panggilan DeepFace yang berat.
+    Fungsi 'pekerja' sinkron ini akan berjalan di background.
+    Tugasnya adalah memindai folder event untuk membuat file cache .pkl.
+    """
+    logger.info(f"DeepFace analysis started for folder: {db_path}")
+    DeepFace.find(
+        img_path=source_path,
+        db_path=db_path,
+        model_name=settings.MODEL_NAME,
+        enforce_detection=False
+    )
+    logger.info(f"DeepFace analysis finished for folder: {db_path}")
+
+async def process_event_images_and_update_status(event_id: int, event_storage_path: str):
+    """
+    Fungsi 'pekerja' asinkron yang lengkap. Ini akan dipanggil sebagai background task.
+    Ia membuat sesi DB sendiri, menjalankan AI, dan mengupdate status.
+    """
+    logger.info(f"BACKGROUND TASK: Starting for event_id: {event_id}")
+    
+    # Langkah 1: Buat Sesi Database (Nampan) baru khusus untuk tugas ini
+    db = AsyncSessionLocal()
+    
+    try:
+        # Beri jeda untuk sinkronisasi file sistem
+        await asyncio.sleep(2)
+
+        images_in_folder = [f for f in os.listdir(event_storage_path) if f.endswith(('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'))]
+        if not images_in_folder:
+            logger.warning(f"BACKGROUND TASK: No images found for event {event_id}. Task skipped.")
+            return
+
+        # Ambil satu gambar sebagai pemicu
+        trigger_image_path = os.path.join(event_storage_path, images_in_folder[0])
+
+        # Langkah 2: Jalankan tugas berat (AI) di thread terpisah
+        await run_in_threadpool(_blocking_deepface_call, trigger_image_path, event_storage_path)
+        
+        # Langkah 3: Gunakan Sesi DB untuk mengupdate status menjadi True
+        await crud_event.set_event_indexed_status(db=db, event_id=event_id, status=True)
+        
+        logger.info(f"BACKGROUND TASK: Successfully indexed event {event_id} and updated status in DB.")
+
+    except Exception as e:
+        logger.error(f"BACKGROUND TASK FAILED for event {event_id}. Error: {e}", exc_info=True)
+    finally:
+        # Langkah 4: Sangat penting untuk selalu menutup sesi database
+        await db.close()
+        logger.info(f"BACKGROUND TASK: DB session closed for event {event_id}.")
