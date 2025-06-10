@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    TF_ENABLE_ONEDNN_OPTS: int = 0
 
     # Opsional: Client ID Google untuk Android/iOS jika perlu validasi audience token Google
     # GOOGLE_ANDROID_CLIENT_ID: Optional[str] = None
