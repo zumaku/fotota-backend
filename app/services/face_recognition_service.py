@@ -38,7 +38,7 @@ def pre_calculate_event_embeddings(event_storage_path: str):
         _ = DeepFace.find(
             img_path=trigger_image_path,
             db_path=event_storage_path,
-            model_name="Facenet512",
+            model_name=settings.MODEL_NAME,
             enforce_detection=False
         )
         
