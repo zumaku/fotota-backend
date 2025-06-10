@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
+    MODEL_NAME: str = "Dlib"
+    
     SELFIE_STORAGE_PATH: str
     EVENT_STORAGE_PATH: str
     

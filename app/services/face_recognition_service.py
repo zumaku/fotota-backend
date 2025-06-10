@@ -35,7 +35,7 @@ async def find_matching_faces(
             DeepFace.find,
             img_path=source_image_path,
             db_path=event_storage_path,
-            model_name="Dlib",
+            model_name=settings.MODEL_NAME,
             enforce_detection=False # Jangan error jika tidak ada wajah di gambar sumber
         )
 
