@@ -58,3 +58,8 @@ class EventPublicSummary(EventInDBBase):
     Hanya mengembalikan 'id_user'.
     """
     id_user: int # <-- Hanya ID user, bukan objek lengkap
+
+# ----------------------------------
+
+class FaceSearchResponse(BaseModel):
+    matched_image_urls: List[str]

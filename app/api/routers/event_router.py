@@ -14,6 +14,7 @@ from app.core import security
 from app.core.config import settings
 from app.db.models import User as UserModel, Event as EventModel
 from app.schemas import event_schema, pagination_schema, image_schema, token_schema
+from app.services import face_recognition_service
 
 IMAGES_STORAGE_PATH = "storage/events"
 os.makedirs(IMAGES_STORAGE_PATH, exist_ok=True)
@@ -282,3 +283,36 @@ async def upload_images_to_event(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid image files were uploaded.")
 
     return created_images
+
+@router.get("/{event_id}/find-my-face", response_model=event_schema.FaceSearchResponse, summary="Find My Photos in an Event")
+async def find_my_face_in_event(
+    event_id: int,
+    db: AsyncSession = Depends(deps.get_db_session),
+    current_user: UserModel = Depends(deps.get_current_active_user)
+):
+    """
+    Memulai proses pencarian wajah pengguna di semua foto dalam sebuah event.
+    Membutuhkan pengguna untuk sudah mengunggah foto selfie.
+    """
+    # 1. Pastikan pengguna punya foto selfie referensi
+    if not current_user.selfie:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must upload a selfie first before using face search."
+        )
+
+    # 2. Pastikan event ada (opsional, tapi bagus untuk validasi)
+    event = await crud_event.get_event_by_id(db, event_id=event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    # 3. Tentukan path folder event di disk
+    event_folder_path = str(settings.EVENT_STORAGE_PATH / str(event_id))
+
+    # 4. Panggil service untuk melakukan pekerjaan berat
+    matched_urls = await face_recognition_service.find_matching_faces(
+        source_image_url=current_user.selfie,
+        event_storage_path=event_folder_path
+    )
+
+    return event_schema.FaceSearchResponse(matched_image_urls=matched_urls)
