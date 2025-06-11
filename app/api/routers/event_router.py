@@ -3,11 +3,13 @@
 import os
 import uuid
 import math
+import shutil
 import logging
 import aiofiles
 from typing import Optional, List
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, BackgroundTasks
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.crud import crud_event, crud_image, crud_activity
@@ -159,12 +161,30 @@ async def delete_an_event(
     (termasuk foto di dalamnya, jika cascade di-setting dengan benar).
     Hanya bisa dilakukan oleh admin pemilik event.
     """
+    
+    # Verifikasi kepemilikan user
     event = await crud_event.get_event_by_id(db=db, event_id=event_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     if event.id_user != admin_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     
+    # Tentukan path folder yang akan dihapus secara absolut
+    event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_id}"
+    
+    # Hapus folder dan isinya dari disk secara asinkron (di thread terpisah)
+    if os.path.exists(event_folder_path):
+        try:
+            # shutil.rmtree adalah operasi blocking, jalankan di thread pool
+            await run_in_threadpool(shutil.rmtree, event_folder_path)
+            logger.info(f"Successfully deleted event folder: {event_folder_path}")
+        except Exception as e:
+            logger.error(f"Failed to delete event folder {event_folder_path}. Error: {e}", exc_info=True)
+            # Jika gagal menghapus file, sebaiknya jangan lanjutkan ke penghapusan DB
+            # agar data tetap konsisten dan bisa diperbaiki manual.
+            raise HTTPException(status_code=500, detail="Failed to delete event assets from disk.")
+            
+    # 4. Jika file fisik berhasil dihapus (atau memang tidak ada), baru hapus record dari database
     await crud_event.delete_event(db=db, event_to_delete=event)
 
 
