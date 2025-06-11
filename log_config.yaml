@@ -52,11 +52,6 @@ handlers:
     # Ini adalah nama file log utama/saat ini
     filename: "logs/fotota_app.log"
     
-    # Pengaturan untuk rotasi harian
-    when: "midnight" # Rotasi setiap tengah malam
-    interval: 1 # Intervalnya adalah 1 hari
-    backupCount: 30 # Simpan log selama 30 hari ke belakang
-    
     encoding: utf8
     # maxBytes tidak lagi diperlukan
 
