@@ -8,13 +8,13 @@ from .image_schema import MatchedImageResult
 
 # Properti dasar untuk membuat atau menampilkan event
 class EventBase(BaseModel):
-    name: str = Field(..., min_length=3, example="Pernikahan Budi & Ani")
-    description: Optional[str] = Field(None, example="Wedding party of Budi and Ani.")
-    date: Optional[datetime] = Field(None, example="2025-12-25T10:00:00Z")
+    name: str = Field(..., min_length=3, example="Presentasi Karya Inready Workgroup 2024")
+    description: Optional[str] = Field(None, example="Pameran karya dari angkatan muda Inready Workgroup.")
+    date: Optional[datetime] = Field(None, example="2024-12-25T10:00:00Z")
 
 # Skema untuk membuat event baru, password wajib diisi
 class EventCreate(EventBase):
-    password: str = Field(..., min_length=4, example="BudiAni2025")
+    password: str = Field(..., min_length=4, example="hitamEmas")
 
 # Skema untuk mengupdate event, semua field opsional
 class EventUpdate(BaseModel):
