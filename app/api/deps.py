@@ -13,9 +13,9 @@ from app.schemas.token_schema import TokenPayload
 
 # OAuth2PasswordBearer menunjuk ke endpoint yang akan mengeluarkan token (meskipun kita tidak pakai form password)
 # Ini hanya untuk FastAPI mengenali skema Bearer token di Swagger UI.
-# Endpoint token kita sebenarnya adalah /api/v1/auth/google atau /api/v1/auth/refresh
+# Endpoint token kita sebenarnya adalah /auth/google atau /auth/refresh
 reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"/api/v1/auth/google" # Sesuaikan dengan prefix API Anda jika ada
+    tokenUrl=f"/auth/google" # Sesuaikan dengan prefix API Anda jika ada
 )
 
 async def get_current_user(

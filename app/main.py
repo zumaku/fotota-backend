@@ -26,9 +26,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
-    openapi_url="/api/v1/openapi.json", # Sesuaikan path OpenAPI
-    docs_url="/api/v1/docs",            # Sesuaikan path Swagger UI
-    redoc_url="/api/v1/redoc",          # Sesuaikan path ReDoc
+    openapi_url="/openapi.json", # Sesuaikan path OpenAPI
+    docs_url="/docs",            # Sesuaikan path Swagger UI
+    redoc_url="/redoc",          # Sesuaikan path ReDoc
     lifespan=lifespan # Menggunakan lifespan manager baru di FastAPI
 )
 
@@ -39,14 +39,14 @@ app.mount("/media", StaticFiles(directory="storage"), name="media")
 # ---------------------------------------------
 
 # Sertakan router
-app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(user_router.router, prefix="/api/v1/users", tags=["Users"])
-app.include_router(event_router.router, prefix="/api/v1/events", tags=["Events"])
-app.include_router(image_router.router, prefix="/api/v1/images", tags=["Images"])
-app.include_router(activity_router.router, prefix="/api/v1/activity", tags=["Activity"])
-app.include_router(fotota_router.router, prefix="/api/v1/fotota", tags=["Fotota"])
+app.include_router(auth_router.router, prefix="/auth", tags=["Authentication"])
+app.include_router(user_router.router, prefix="/users", tags=["Users"])
+app.include_router(event_router.router, prefix="/events", tags=["Events"])
+app.include_router(image_router.router, prefix="/images", tags=["Images"])
+app.include_router(activity_router.router, prefix="/activity", tags=["Activity"])
+app.include_router(fotota_router.router, prefix="/fotota", tags=["Fotota"])
 
-@app.get('/api/v1', tags=["Welcome"])
+@app.get('/', tags=["Welcome"])
 async def welcome_message():
     """
     Endpoint selamat datang untuk API FotoTa.
@@ -55,10 +55,10 @@ async def welcome_message():
     return {
         "message": f"Welcome to the {settings.PROJECT_NAME} API!",
         "version": settings.PROJECT_VERSION,
-        "documentation_url": "/api/v1/docs"
+        "documentation_url": "/docs"
     }
 
-@app.get("/api/v1/health", tags=["Health"])
+@app.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "healthy", "project": settings.PROJECT_NAME, "version": settings.PROJECT_VERSION}
 
