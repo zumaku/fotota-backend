@@ -187,7 +187,6 @@ async def delete_an_event(
     # 4. Jika file fisik berhasil dihapus (atau memang tidak ada), baru hapus record dari database
     await crud_event.delete_event(db=db, event_to_delete=event)
 
-
 @router.post("/{event_id}/access", response_model=event_schema.EventAccessToken, summary="Get Event Access Token")
 async def get_event_access_token(
     event_id: int,
@@ -220,7 +219,6 @@ async def get_event_access_token(
     )
     
     return event_schema.EventAccessToken(event_access_token=eat)
-
 
 @router.get("/{event_id}/images", response_model=pagination_schema.PaginatedResponse[image_schema.ImagePublic], summary="Get Images in an Event with Pagination")
 async def get_images_in_event(
