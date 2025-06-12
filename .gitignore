@@ -1,6 +1,7 @@
 # Temporary Storage
-storage/selfies/
-storage/events/
+storage/selfies/*
+storage/events/*
+!storage/events/no_image.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
