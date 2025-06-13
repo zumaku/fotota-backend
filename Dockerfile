@@ -1,7 +1,7 @@
 # --- Stage 1: Build Stage ---
 # Menggunakan image Python penuh untuk menginstal dependensi,
 # termasuk yang mungkin memerlukan build tools.
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Mengatur working directory di dalam container
 WORKDIR /app
@@ -24,6 +24,9 @@ FROM python:3.11-slim
 
 # Mengatur working directory yang sama
 WORKDIR /app
+
+# Install build-essential (untuk C++ compiler) dan cmake yang dibutuhkan oleh library dlib
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential cmake
 
 # Membuat user non-root untuk keamanan
 # Menjalankan container sebagai root adalah praktik yang buruk.
