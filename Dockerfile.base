@@ -1,0 +1,17 @@
+# backend/Dockerfile.base
+
+# Menggunakan base image Python slim
+FROM python:3.11-slim
+
+# Install semua build tools yang diperlukan untuk dlib, dll.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential cmake
+
+# Set working directory
+WORKDIR /install_dir
+
+# Salin hanya file requirements
+COPY requirements.txt .
+
+# Install semua dependensi Python. Beri timeout yang sangat panjang.
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt
