@@ -14,7 +14,7 @@ formatters:
   access_color:
     (): "uvicorn.logging.AccessFormatter"
     # --- PERUBAHAN DI SINI: Tambahkan %(asctime)s ---
-    fmt: '%(levelprefix)s| %(asctime)s |  %(client_addr)s - "%(request_line)s" %(status_code)s'
+    fmt: '%(asctime)s | %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
     datefmt: "%Y-%m-%d %H:%M:%S"
     use_colors: True
 
@@ -35,14 +35,14 @@ handlers:
     class: "logging.StreamHandler"
     formatter: "access_color"
     stream: "ext://sys.stdout"
-    
+
+  # Handler untuk file (tetap sama)
   file:
-    class: "logging.handlers.TimedRotatingFileHandler"
+    class: "logging.handlers.RotatingFileHandler"
     formatter: "file_simple"
     filename: "logs/fotota_app.log"
-    when: "midnight"
-    interval: 1
-    backupCount: 30
+    maxBytes: 10485760
+    backupCount: 5
     encoding: utf8
 
 # Konfigurasi logger utama aplikasi Anda
