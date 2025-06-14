@@ -200,7 +200,7 @@ CREATE INDEX ix_activity_id ON activity(id);
 CREATE INDEX ix_fotota_id ON fotota(id);
 ```
 
-## Menjalankan Aplikasi
+### Menjalankan Aplikasi
 
 Pastikan Anda berada di direktori `backend/` dan virtual environment Anda aktif.
 
@@ -213,7 +213,109 @@ uvicorn app.main:app --reload --log-config log_config.yaml
 
 Server akan berjalan di `http://localhost:8000`.
 
-## Dokumentasi API
+### Dokumentasi API
 
 Setelah server berjalan, dokumentasi API interaktif (Swagger UI) tersedia di:
 **[http://localhost:8000/api/v1/docs](https://www.google.com/search?q=http://localhost:8000/api/v1/docs)**
+
+## Menjalankan dengan Docker (Direkomendasikan)
+
+Ini adalah cara terbaik untuk memastikan lingkungan pengembangan yang konsisten, portabel, dan siap untuk produksi.
+
+### 1\. Prasyarat Docker
+
+Docker Desktop (untuk Windows/Mac) atau Docker Engine (untuk Linux) sudah terinstal dan sedang berjalan.
+
+Server PostgreSQL berjalan di mesin Anda (bisa di localhost atau di VM GCP).
+
+### 2\. Konfigurasi .env untuk Docker
+
+Sebelum membangun image, pastikan file `.env` Anda dikonfigurasi dengan benar agar kontainer bisa terhubung ke database.
+
+- Jika Database Anda berjalan di laptop (localhost):
+
+    ```
+    POSTGRES_SERVER=host.docker.internal
+    ```
+
+(host.docker.internal adalah alamat khusus yang merujuk ke mesin host dari dalam kontainer Docker).
+
+- Jika Database Anda berjalan di VM GCP:
+
+    ```
+    POSTGRES_SERVER=<ALAMAT_IP_PUBLIK_VM_GCP_ANDA>
+    ```
+
+Pastikan untuk semua kredensial database di `.env` benar.
+
+Pastikan juga firewall GCP dan konfigurasi PostgreSQL di VM mengizinkan koneksi eksternal.
+
+> Note: Terkadang penggunaan tanda kutip ("") pada isi dari variable di `.env` dapat menyebabkan error saat runing time.
+
+### 3\. Alur Kerja Build Docker (Dua Tahap)
+Kita menggunakan pendekatan dua tahap untuk build yang lebih cepat dan image yang lebih kecil.
+
+Pendekatan dua tahap ini digunakan karena library-library yang digunakan untuk `DeepFace` sangat besar.
+
+#### Tahap A: Bangun Base Image (Fondasi)
+
+Tahap ini berat dan lambat, berisi semua instalasi dependensi. Anda hanya perlu menjalankannya sekali saja, atau setiap kali Anda mengubah requirements.txt.
+
+```shell
+docker build -f Dockerfile.base -t fotota-backend-base:local-build .
+```
+
+- `-f` Dockerfile.base: Secara eksplisit menggunakan file Dockerfile.base.
+
+- `-t` fotota-backend-base:local-build: Memberi nama "fondasi" kita.
+
+#### Tahap B: Bangun Image Aplikasi
+
+Tahap ini sangat cepat. Ia akan menggunakan "fondasi" yang sudah jadi dan hanya menumpuk kode aplikasi Anda di atasnya. Jalankan ini setiap kali Anda mengubah kode Python.
+
+```shell
+docker build -t fotota-backend .
+```
+
+### 4\. Menjalankan Docker Container
+
+Setelah image fotota-backend berhasil dibuat, jalankan dengan perintah berikut:
+
+```shell
+docker run -d \
+  -p 8000:8000 \
+  --env-file .env \
+  -v ./storage:/app/storage \
+  -v ./logs:/app/logs \
+  --name fotota-api \
+  fotota-backend
+```
+
+Penjelasan Perintah:
+
+- `docker run`: Perintah utama untuk menjalankan sebuah container.
+
+- `-d`: Menjalankan container di latar belakang (detached mode).
+
+- `-p` 8000:8000: Memetakan port 8000 di laptop Anda ke port 8000 di dalam container.
+
+- `--env-file .env`: Menyuntikkan semua variabel konfigurasi dari file .env Anda ke dalam container.
+
+- `-v` ./storage:/app/storage: Menautkan folder storage di laptop Anda ke /app/storage di dalam container. Ini membuat data unggahan Anda permanen.
+
+- `-v` ./logs:/app/logs: Sama seperti di atas, untuk menyimpan file log di laptop Anda.
+
+- `--name fotota-api`: Memberi nama yang mudah diingat pada container Anda.
+
+- `fotota-backend`: Nama image yang akan dijalankan.
+
+### 5\. Mengelola Container
+- Melihat container yang berjalan: `docker ps` atau `docker ps -a`
+
+- Melihat log aplikasi: `docker logs -f fotota-api` (`-f` untuk mengikuti log secara real-time).
+
+- Menghentikan container: `docker stop fotota-api`
+
+- Menjalankan kembali container yang sudah ada: `docker start fotota-api`
+
+- Menghapus container (setelah dihentikan): `docker rm fotota-api`
