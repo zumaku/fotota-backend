@@ -1,20 +1,23 @@
 # backend/Dockerfile
 
-# Mulai dari "fondasi" yang sudah kita buat secara lokal
+# Mulai dari "fondasi" kita yang sudah lengkap dan siap pakai
 FROM fotota-backend-base:local-build
 
-# Mengatur working directory di dalam container
+# Set working directory
 WORKDIR /app
 
-# Membuat user non-root untuk keamanan
+# Buat user non-root
 RUN addgroup --system app && adduser --system --group app
 
-# Menyalin kode aplikasi Anda. Tidak ada lagi 'pip install' di sini!
+# Salin kode aplikasi Anda.
 COPY ./app /app/app
 COPY ./log_config.yaml /app/log_config.yaml
-RUN mkdir -p /app/logs && chown -R app:app /app/logs
-RUN mkdir -p /app/storage && chown -R app:app /app/storage
-COPY ./storage/events/no_image.png /app/storage/events/no_image.png
+
+# Buat direktori logs dan storage
+RUN mkdir -p /app/logs
+RUN mkdir -p /app/storage
+
+# Berikan kepemilikan ke user 'app'
 RUN chown -R app:app /app
 
 # Ganti ke user non-root

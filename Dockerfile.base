@@ -1,17 +1,21 @@
 # backend/Dockerfile.base
 
-# Menggunakan base image Python slim
 FROM python:3.11-slim
 
-# Install semua build tools yang diperlukan untuk dlib, dll.
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential cmake
+# 1. Install SEMUA dependensi sistem yang dibutuhkan, baik untuk build maupun runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# 2. Set working directory
 WORKDIR /install_dir
 
-# Salin hanya file requirements
+# 3. Salin file requirements
 COPY requirements.txt .
 
-# Install semua dependensi Python. Beri timeout yang sangat panjang.
+# 4. Install semua dependensi Python
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt
