@@ -10,16 +10,16 @@ from app.api.routers import auth_router, user_router, event_router, image_router
 # Setup Logging
 setup_logging()
 
-# Fungsi untuk event startup dan shutdown (misalnya membuat tabel DB)
+# Fungsi untuk event startup dan shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Buat tabel database (HANYA UNTUK PENGEMBANGAN, gunakan Alembic untuk produksi)
-    async with engine.begin() as conn:
-        # await conn.run_sync(Base.metadata.drop_all) # Hati-hati, hapus semua tabel!
-        await conn.run_sync(Base.metadata.create_all)
-    print("Database tables created (if they didn't exist).")
+    # # Startup: Buat tabel database (HANYA UNTUK PENGEMBANGAN, gunakan Alembic untuk produksi)
+    # async with engine.begin() as conn:
+    #     # await conn.run_sync(Base.metadata.drop_all) # Hati-hati, hapus semua tabel!
+    #     await conn.run_sync(Base.metadata.create_all)
+    print("Database Started.")
     yield
-    # Shutdown: (misalnya menutup koneksi pool jika diperlukan, tapi engine biasanya handle ini)
+    # Shutdown
     print("Application shutdown.")
 
 
