@@ -26,6 +26,7 @@ RUN chown -R app:app /app
 # Salin kode aplikasi Anda.
 COPY ./app /app/app
 COPY ./log_config.yaml /app/log_config.yaml
+COPY ./storage/assets /app/assets
 
 # Buat direktori logs dan storage
 RUN mkdir -p /app/logs

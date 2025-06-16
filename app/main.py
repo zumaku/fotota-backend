@@ -1,11 +1,14 @@
+import logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.db.database import engine
 from app.db.models import Base # Base dari user_model jika tidak pakai base_class
 from app.api.routers import auth_router, user_router, event_router, image_router, activity_router, fotota_router
+from app.services import face_recognition_service
 
 # Setup Logging
 setup_logging()
@@ -13,14 +16,20 @@ setup_logging()
 # Fungsi untuk event startup dan shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # # Startup: Buat tabel database (HANYA UNTUK PENGEMBANGAN, gunakan Alembic untuk produksi)
-    # async with engine.begin() as conn:
-    #     # await conn.run_sync(Base.metadata.drop_all) # Hati-hati, hapus semua tabel!
-    #     await conn.run_sync(Base.metadata.create_all)
-    print("Database Started.")
-    yield
-    # Shutdown
-    print("Application shutdown.")
+    # --- Kode yang berjalan saat STARTUP ---
+    logger = logging.getLogger(__name__) # Ambil logger
+    
+    logger.info("Application startup")
+    
+    # Jalankan pre-loading model yang berat di thread terpisah
+    logger.info("Application startup: Scheduling DeepFace model pre-loading...")
+    await run_in_threadpool(face_recognition_service.warm_up_deepface)
+    # -------------------
+
+    yield # Aplikasi sekarang siap menerima request
+
+    # --- Kode yang berjalan saat SHUTDOWN ---
+    logger.info("Application shutdown.")
 
 
 app = FastAPI(

@@ -13,6 +13,34 @@ from app.db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
+def warm_up_deepface():
+    """
+    Fungsi untuk "pemanasan" DeepFace.
+    Menjalankan proses 'find' dummy untuk memaksa semua model diunduh
+    dan dimuat ke memori saat startup aplikasi.
+    """
+    try:
+        logger.info("🔥 Warming up DeepFace. This will trigger model downloads if not present...")
+        
+        # Definisikan path ke aset placeholder di dalam container
+        placeholder_img_path = "/app/assets/placeholder_face.jpg"
+        # Kita bisa gunakan folder events yang sudah ada sebagai db_path dummy
+        # Pastikan folder ini dibuat oleh config.py atau Dockerfile
+        placeholder_db_path = str(settings.EVENT_STORAGE_PATH)
+
+        # Panggilan dummy ini akan memaksa DeepFace untuk inisialisasi penuh
+        DeepFace.find(
+            img_path=placeholder_img_path,
+            db_path=placeholder_db_path,
+            model_name='Dlib',
+            enforce_detection=False,
+            silent=True # Mencegah DeepFace mencetak progress bar-nya sendiri ke log
+        )
+        
+        logger.info("✅ DeepFace warm-up complete. All models are ready.")
+    except Exception as e:
+        logger.critical(f"❌ CRITICAL: Failed to warm-up DeepFace models. Error: {e}", exc_info=True)
+
 def convert_public_url_to_local_path(url: str) -> str:
     """Mengubah URL publik kembali menjadi path disk lokal."""
     # Contoh: http://localhost:8000/media/selfies/file.jpg -> storage/selfies/file.jpg
