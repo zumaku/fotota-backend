@@ -300,7 +300,6 @@ async def upload_images_to_event(
 
         unique_filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
         file_path_on_disk = f"{event_photo_path}/{unique_filename}"
-        logger.info(file_path_on_disk)
         
         # Simpan file ke disk
         try:
@@ -329,8 +328,6 @@ async def upload_images_to_event(
 
     if not created_images:
         raise HTTPException(status_code=400, detail="No valid image files were uploaded.")
-
-    logger.info(image_processing_jobs)
 
     # --- Panggil Background Task SATU KALI SAJA setelah loop selesai ---
     background_tasks.add_task(
