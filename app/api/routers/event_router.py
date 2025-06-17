@@ -6,6 +6,7 @@ import math
 import shutil
 import logging
 import aiofiles
+from deepface import DeepFace
 from typing import Optional, List
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, BackgroundTasks
@@ -267,134 +268,142 @@ async def get_images_in_event(
     
 @router.post("/{event_id}/images", response_model=List[image_schema.ImagePublic], status_code=status.HTTP_201_CREATED, summary="Upload Images to a Specific Event")
 async def upload_images_to_event(
-    event_id: int, # event_id sekarang diambil dari path URL
+    event_id: int,
     *,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(deps.get_db_session),
     files: List[UploadFile] = File(...),
     admin_user: UserModel = Depends(deps.get_current_admin_user)
 ):
-    """
-    Mengunggah satu atau lebih foto ke sebuah event spesifik.
-    Endpoint ini menggantikan /images/upload yang lama.
-    """
+    # ... (verifikasi event dan owner tetap sama) ...
     event = await crud_event.get_event_by_id(db=db, event_id=event_id)
     if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
-    
+        raise HTTPException(status_code=404, detail="Event not found")
     if event.id_user != admin_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this event.")
+        raise HTTPException(status_code=403, detail="You do not own this event.")
+
+    # Set status event kembali ke "sedang mengindeks"
+    await crud_event.set_event_indexed_status(db, event_id=event_id, status=False)
 
     event_photo_path = f"{settings.EVENT_STORAGE_PATH}/{event.id}"
-
+    logger.info(event_photo_path)
+    os.makedirs(event_photo_path, exist_ok=True)
+    
+    # --- LOGIKA BARU: Kumpulkan semua pekerjaan dulu ---
     created_images = []
+    image_processing_jobs = []
+
     for file in files:
+        # ... (logika validasi dan penyimpanan file tetap sama) ...
         if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
             continue
 
-        file_extension = file.filename.split(".")[-1]
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
-        file_path_on_disk = os.path.join(event_photo_path, unique_filename)
+        unique_filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
+        file_path_on_disk = f"{event_photo_path}/{unique_filename}"
+        logger.info(file_path_on_disk)
         
-        async with aiofiles.open(file_path_on_disk, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
+        # Simpan file ke disk
+        try:
+            async with aiofiles.open(file_path_on_disk, 'wb') as out_file:
+                content = await file.read()
+                await out_file.write(content)
+        except Exception as e:
+            logger.error(f"Failed to save uploaded file {file.filename}. Error: {e}")
+            continue # Lanjut ke file berikutnya jika gagal menyimpan
 
+        # Buat URL publik
         public_url = f"{settings.API_BASE_URL}/media/events/{event.id}/{unique_filename}"
-        
+
+        # Simpan metadata gambar ke DB
         db_image = await crud_image.create_event_image(
             db=db, file_name=unique_filename, url=public_url, event_id=event.id
         )
         created_images.append(db_image)
 
-    if not created_images:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid image files were uploaded.")
+        # Tambahkan pekerjaan ke daftar
+        image_processing_jobs.append({
+            "event_id": event.id,
+            "image_id": db_image.id,
+            "image_path": file_path_on_disk
+        })
 
-    # Set status kembali ke False, karena ada gambar baru yang butuh di-indeks ulang
-    await crud_event.set_event_indexed_status(db, event_id=event_id, status=False)
-    
-    # TAMBAHKAN TUGAS KE BACKGROUND
-    # Daftarkan fungsi 'pekerja' untuk dijalankan setelah respons ini dikirim.
-    # Kita berikan path absolut ke folder event sebagai argumen.
+    if not created_images:
+        raise HTTPException(status_code=400, detail="No valid image files were uploaded.")
+
+    logger.info(image_processing_jobs)
+
+    # --- Panggil Background Task SATU KALI SAJA setelah loop selesai ---
     background_tasks.add_task(
-        face_recognition_service.process_event_images_and_update_status,
-        event_id=event_id,
-        event_storage_path=str(event_photo_path)
+        face_recognition_service.process_image_batch_and_save_faces,
+        image_jobs=image_processing_jobs
     )
-    print(f"INFO: {len(created_images)} files uploaded. Indexing task scheduled for event {event_id}.")
+    
+    logger.info(f"{len(created_images)} files uploaded. A batch processing task with {len(image_processing_jobs)} jobs has been scheduled for event {event_id}.")
 
     return created_images
 
-@router.get("/{event_id}/find-my-face", response_model=List[image_schema.MatchedImageResult], summary="Find My Photos in an Event")
+@router.get("/{event_id}/find-my-face", response_model=List[image_schema.MatchedImageResult], summary="Find My Photos in an Event using Vector Search")
 async def find_my_face_in_event(
     event_id: int,
     db: AsyncSession = Depends(deps.get_db_session),
     current_user: UserModel = Depends(deps.get_current_active_user)
-):  
+):
     """
-    Memulai proses pencarian wajah pengguna di semua foto dalam sebuah event.
-    Membutuhkan pengguna untuk sudah mengunggah foto selfie.
+    Memulai proses pencarian wajah pengguna di semua foto dalam sebuah event
+    menggunakan metode Vector Similarity Search di database.
     """
-    # 1. Pastikan pengguna punya foto selfie referensi
+    # 1. Validasi Awal: Pastikan pengguna punya foto selfie
     if not current_user.selfie:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You must upload a selfie first before using face search."
         )
 
-    # 2. Pastikan event ada (opsional, tapi bagus untuk validasi)
+    # 2. Validasi Awal: Pastikan event ada
     event = await crud_event.get_event_by_id(db, event_id=event_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
-    
-    # Pengecekan status indexed by robota
-    if not event.indexed_by_robota:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Event is currently being indexed. Please try again in a few moments."
+
+    # (Opsional) Pengecekan Status Indexing yang lebih baik
+    # Daripada flag 'indexed_by_robota', kita bisa cek apakah jumlah gambar
+    # sudah sama dengan jumlah wajah yang terindeks untuk event ini.
+    # Untuk saat ini kita lewati agar tidak terlalu kompleks, tapi ini adalah ide untuk masa depan.
+
+    # --- LOGIKA UTAMA BARU ---
+
+    # 3. Dapatkan Vektor Wajah dari Foto Selfie Pengguna
+    logger.info(f"Generating embedding for user {current_user.id}'s selfie...")
+    # Ubah URL selfie menjadi path disk lokal
+    selfie_path = current_user.selfie.replace(f"{settings.API_BASE_URL}/media/", settings.SELFIE_STORAGE_PATH, 1)
+    try:
+        # Jalankan DeepFace.represent yang berat di thread terpisah
+        target_embedding_list = await run_in_threadpool(
+            DeepFace.represent,
+            img_path=selfie_path,
+            model_name=settings.MODEL_NAME,  # Gunakan model yang konsisten
+            enforce_detection=True
         )
-
-    # 3. Tentukan path folder event di disk
-    event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_id}"
+        # Ambil vektor dari wajah pertama yang terdeteksi
+        target_embedding = target_embedding_list[0]["embedding"]
+    except Exception:
+        # Ini terjadi jika tidak ada wajah terdeteksi di foto selfie
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not find a face in your selfie. Please upload a clearer photo."
+        )
     
-    # 4. Dapatkan hasil mentah dari service (path disk + koordinat)
-    raw_matches = await face_recognition_service.find_matching_faces(
-        source_image_url=current_user.selfie,
-        event_storage_path=event_folder_path
+    logger.info(f"Selfie embedding generated. Searching for similar faces in event {event_id}...")
+
+    # 4. Panggil Service Pencarian Berbasis Database dengan Vektor Target
+    # Service ini akan menjalankan query SELECT ... WHERE vector <=> ...
+    matched_images_data = await face_recognition_service.find_similar_faces_in_db(
+        db=db,
+        event_id=event_id,
+        target_embedding=target_embedding,
+        threshold=0.6 # Ambang batas kemiripan, bisa diatur. Semakin kecil semakin mirip.
     )
-    
-    if not raw_matches:
-        return [] # Kembalikan list kosong jika tidak ada yang cocok
 
-    # 5. Ubah path disk kembali menjadi URL publik untuk dicari di database
-    matched_urls = [
-        path.replace("storage/", f"{settings.API_BASE_URL}/media/", 1) 
-        for path in [match["disk_path"] for match in raw_matches]
-    ]
-
-    # 6. Ambil semua objek Image dari database dalam satu query yang efisien
-    image_objects = await crud_image.get_images_by_urls(db, urls=matched_urls)
-    
-    # 7. Buat lookup dictionary untuk akses cepat: url -> ImageObject
-    image_map = {image.url: image for image in image_objects}
-    
-    # 8. Gabungkan semua data menjadi respons akhir
-    matched_images = []
-    for match in raw_matches:
-        public_url = match["disk_path"].replace("storage/", f"{settings.API_BASE_URL}/media/", 1)
-        image_obj = image_map.get(public_url)
-        
-        if image_obj:
-            # Buat sebuah DICTIONARY Python, bukan objek Pydantic
-            result_item = {
-                "id": image_obj.id,
-                "file_name": image_obj.file_name,
-                "url": image_obj.url,
-                "id_event": image_obj.id_event,
-                "created_at": image_obj.created_at,
-                "face": match["face_coords"]
-            }
-            matched_images.append(result_item)
-            
-    # Kembalikan sebuah list of dictionaries
-    return matched_images
+    # 5. Kembalikan Hasilnya
+    # Tidak perlu lagi proses manual, karena service sudah mengembalikan data jadi
+    # dalam format list of dictionary yang cocok dengan skema MatchedImageResult.
+    return matched_images_data

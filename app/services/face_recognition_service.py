@@ -1,161 +1,127 @@
 # app/services/face_recognition_service.py
 
-import os
-import time
-import asyncio
 import logging
+import asyncio
 from typing import List, Dict, Any
 from deepface import DeepFace
 from fastapi.concurrency import run_in_threadpool
-from app.crud import crud_event
-from app.core.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app.core.security import settings
+from app.crud import crud_face, crud_event
 from app.db.database import AsyncSessionLocal
+from app.db.models import Face as FaceModel, Image as ImageModel
 
 logger = logging.getLogger(__name__)
 
-def warm_up_deepface():
-    """
-    Fungsi untuk "pemanasan" DeepFace.
-    Menjalankan proses 'find' dummy untuk memaksa semua model diunduh
-    dan dimuat ke memori saat startup aplikasi.
-    """
+def _blocking_represent_one_image(image_path: str) -> List[Dict[str, Any]]:
+    """Fungsi pembungkus sinkron yang hanya memproses SATU gambar."""
     try:
-        logger.info("🔥 Warming up DeepFace. This will trigger model downloads if not present...")
-        
-        # Definisikan path ke aset placeholder di dalam container
-        placeholder_img_path = "/app/assets/placeholder_face.jpg"
-        # Kita bisa gunakan folder events yang sudah ada sebagai db_path dummy
-        # Pastikan folder ini dibuat oleh config.py atau Dockerfile
-        placeholder_db_path = str(settings.EVENT_STORAGE_PATH)
-
-        # Panggilan dummy ini akan memaksa DeepFace untuk inisialisasi penuh
-        DeepFace.find(
-            img_path=placeholder_img_path,
-            db_path=placeholder_db_path,
-            model_name='Dlib',
-            enforce_detection=False,
-            silent=True # Mencegah DeepFace mencetak progress bar-nya sendiri ke log
-        )
-        
-        logger.info("✅ DeepFace warm-up complete. All models are ready.")
-    except Exception as e:
-        logger.critical(f"❌ CRITICAL: Failed to warm-up DeepFace models. Error: {e}", exc_info=True)
-
-def convert_public_url_to_local_path(url: str) -> str:
-    """Mengubah URL publik kembali menjadi path disk lokal."""
-    # Contoh: http://localhost:8000/media/selfies/file.jpg -> storage/selfies/file.jpg
-    # Kita asumsikan BACKEND_ROOT sudah terdefinisi di settings
-    base_url = settings.API_BASE_URL
-    relative_path = url.replace(f"{base_url}/media/", "storage/", 1)
-    # Ini masih path relatif dari folder backend, DeepFace bisa menanganinya
-    return relative_path
-
-async def find_matching_faces(
-    source_image_url: str,
-    event_storage_path: str # Path ke folder event, cth: storage/events/12
-) -> List[Dict[str, Any]]:
-    """
-    Menjalankan DeepFace.find di thread terpisah untuk mencari wajah yang cocok.
-    Mengembalikan daftar URL publik dari gambar yang cocok.
-    """
-    try:
-        # Ubah URL selfie menjadi path lokal
-        source_image_path = convert_public_url_to_local_path(source_image_url)
-
-        # Jalankan DeepFace.find yang berat di thread terpisah
-        # Ini adalah bagian terpenting untuk menjaga performa server
-        # DeepFace.find mengembalikan pandas DataFrame
-        dfs = await run_in_threadpool(
-            DeepFace.find,
-            img_path=source_image_path,
-            db_path=event_storage_path,
+        extracted_faces = DeepFace.represent(
+            img_path=image_path,
             model_name=settings.MODEL_NAME,
-            enforce_detection=False # Jangan error jika tidak ada wajah di gambar sumber
+            # enforce_detection=True,
         )
-
-        # DeepFace mengembalikan list of DataFrames
-        if not isinstance(dfs, list) or len(dfs) == 0:
-            return []
-
-        # Ambil DataFrame pertama yang berisi hasil
-        result_df = dfs[0]
-
-        # Filter hasil untuk mendapatkan path file yang cocok
-        # 'identity' adalah path ke file yang ditemukan di db_path
-        # Jika tidak ada kolom 'identity' atau kosong, kembalikan list kosong
-        if "identity" not in result_df.columns or result_df.empty:
-            return []
-        
-        # Ekstrak data lengkap dari DataFrame
-        results = []
-        for index, row in result_df.iterrows():
-            # 'identity' adalah path disk ke gambar yang cocok
-            # 'target_x', 'target_y', 'target_w', 'target_h' adalah koordinatnya
-            results.append({
-                "disk_path": row["identity"].replace("\\", "/"), # Normalisasi path separator
-                "face_coords": {
-                    "x": row["target_x"],
-                    "y": row["target_y"],
-                    "w": row["target_w"],
-                    "h": row["target_h"],
-                }
-            })
-        
-        return results
-
-    except Exception as e:
-        # Tangani error jika DeepFace gagal atau folder tidak ada
-        print(f"DeepFace Error: {e}")
+        # face_data_list = []
+        # for face in extracted_faces:
+        #     coords = face.facial_area
+        #     face_data_list.append({
+        #         "embedding": face.embedding,
+        #         "x": coords.x,
+        #         "y": coords.y,
+        #         "w": coords.w,
+        #         "h": coords.h,
+        #     })
+        # return face_data_list
+        return extracted_faces
+    except Exception:
         return []
 
-def _blocking_deepface_call(source_path: str, db_path: str):
+async def process_image_batch_and_save_faces(image_jobs: List[Dict[str, Any]]):
     """
-    Fungsi pembungkus sinkron untuk panggilan DeepFace yang berat.
-    Fungsi 'pekerja' sinkron ini akan berjalan di background.
-    Tugasnya adalah memindai folder event untuk membuat file cache .pkl.
+    Fungsi pembungkus asinkron untuk dijalankan sebagai background task.
+    Menerima daftar pekerjaan dan memprosesnya satu per satu.
     """
-    logger.info(f"DeepFace analysis started for folder: {db_path}")
-    DeepFace.find(
-        img_path=source_path,
-        db_path=db_path,
-        model_name=settings.MODEL_NAME,
-        enforce_detection=False
-    )
-    logger.info(f"DeepFace analysis finished for folder: {db_path}")
-
-async def process_event_images_and_update_status(event_id: int, event_storage_path: str):
-    """
-    Fungsi 'pekerja' asinkron yang lengkap. Ini akan dipanggil sebagai background task.
-    Ia membuat sesi DB sendiri, menjalankan AI, dan mengupdate status.
-    """
-    logger.info(f"BACKGROUND TASK: Starting for event_id: {event_id}")
-    
-    # Langkah 1: Buat Sesi Database (Nampan) baru khusus untuk tugas ini
+    logger.info(f"BACKGROUND TASK: Starting to process a batch of {len(image_jobs)} images.")
     db = AsyncSessionLocal()
-    
     try:
-        # Beri jeda untuk sinkronisasi file sistem
-        await asyncio.sleep(2)
+        # Loop melalui setiap pekerjaan (gambar) secara berurutan
+        for job in image_jobs:
+            image_id = job["image_id"]
+            image_path = job["image_path"]
 
-        images_in_folder = [f for f in os.listdir(event_storage_path) if f.endswith(('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'))]
-        if not images_in_folder:
-            logger.warning(f"BACKGROUND TASK: No images found for event {event_id}. Task skipped.")
-            return
+            # Jalankan proses AI yang berat di thread terpisah
+            extracted_faces = await run_in_threadpool(_blocking_represent_one_image, image_path)
+            
+            if not extracted_faces:
+                logger.warning(f"No faces found in image_id: {image_id}. Skipping.")
+                continue
 
-        # Ambil satu gambar sebagai pemicu
-        trigger_image_path = os.path.join(event_storage_path, images_in_folder[0])
-
-        # Langkah 2: Jalankan tugas berat (AI) di thread terpisah
-        await run_in_threadpool(_blocking_deepface_call, trigger_image_path, event_storage_path)
+            # Simpan setiap wajah yang ditemukan ke database
+            for face_data in extracted_faces:
+                face_data['id_image'] = image_id
+                await crud_face.create_face_embedding(db, face_data=face_data)
+            
+            logger.info(f"✅ Processed image_id: {image_id}, found {len(extracted_faces)} faces.")
         
-        # Langkah 3: Gunakan Sesi DB untuk mengupdate status menjadi True
-        await crud_event.set_event_indexed_status(db=db, event_id=event_id, status=True)
-        
-        logger.info(f"BACKGROUND TASK: Successfully indexed event {event_id} and updated status in DB.")
+        # Setelah semua selesai, kita bisa update status event
+        if image_jobs:
+            event_id = image_jobs[0].get("event_id")
+            if event_id:
+                await crud_event.set_event_indexed_status(db, event_id=event_id, status=True)
+                logger.info(f"✅ BACKGROUND TASK: Finished processing batch and marked event {event_id} as indexed.")
 
     except Exception as e:
-        logger.error(f"BACKGROUND TASK FAILED for event {event_id}. Error: {e}", exc_info=True)
+        logger.error(f"❌ BACKGROUND TASK FAILED during batch processing. Error: {e}", exc_info=True)
     finally:
-        # Langkah 4: Sangat penting untuk selalu menutup sesi database
         await db.close()
-        logger.info(f"BACKGROUND TASK: DB session closed for event {event_id}.")
+
+async def find_similar_faces_in_db(
+    db: AsyncSession, *, event_id: int, target_embedding: List[float], threshold: float = 0.6
+) -> List[Dict[str, Any]]:
+    """
+    Mencari wajah yang mirip di database menggunakan perbandingan vektor.
+    """
+    # Query untuk mencari wajah di event tertentu yang jaraknya di bawah threshold
+    # <=> adalah operator Cosine Distance dari pgvector
+    query = (
+        select(FaceModel, FaceModel.embedding.cosine_distance(target_embedding).label("distance"))
+        .join(ImageModel)
+        .filter(ImageModel.id_event == event_id)
+        .filter(FaceModel.embedding.cosine_distance(target_embedding) < threshold)
+        .order_by(FaceModel.embedding.cosine_distance(target_embedding))
+    )
+    
+    result = await db.execute(query)
+    
+    # Proses hasil untuk digabungkan menjadi respons
+    final_matches = []
+    # Gunakan dict untuk memastikan kita hanya mengembalikan satu gambar sekali, meskipun ada banyak wajah cocok di dalamnya
+    image_matches = {}
+
+    for face, distance in result.all():
+        if face.id_image not in image_matches:
+            # Muat relasi image secara async
+            image = await db.get(ImageModel, face.id_image)
+            image_matches[face.id_image] = {
+                "image_obj": image,
+                "faces": []
+            }
+        
+        image_matches[face.id_image]["faces"].append({
+            "x": face.x, "y": face.y, "w": face.w, "h": face.h
+        })
+
+    # Ubah format menjadi list of dictionaries
+    for img_id, data in image_matches.items():
+        img = data["image_obj"]
+        final_matches.append({
+            "id": img.id,
+            "file_name": img.file_name,
+            "url": img.url,
+            "id_event": img.id_event,
+            "created_at": img.created_at,
+            "face": data["faces"][0] # Ambil koordinat wajah pertama yang cocok sebagai representasi
+        })
+
+    return final_matches

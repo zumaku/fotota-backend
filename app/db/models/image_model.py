@@ -18,4 +18,5 @@ class Image(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     event = relationship("Event", back_populates="images")
+    faces = relationship("Face", back_populates="image", cascade="all, delete-orphan")
     saved_by_users = relationship("Fotota", back_populates="image", cascade="all, delete-orphan")

@@ -6,3 +6,4 @@ from .event_model import Event
 from .image_model import Image
 from .activity_model import Activity
 from .fotota_model import Fotota
+from .face_model import Face
