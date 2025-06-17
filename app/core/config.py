@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     MODEL_NAME: str = "Dlib"
-    DEEPFACE_VECTOR_DIMENSION: int = 128
     
     SELFIE_STORAGE_PATH: str
     EVENT_STORAGE_PATH: str
