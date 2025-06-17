@@ -19,7 +19,7 @@ def _blocking_represent_one_image(image_path: str) -> List[Dict[str, Any]]:
     try:
         extracted_faces = DeepFace.represent(
             img_path=image_path,
-            model_name=settings.MODEL_NAME,
+            model_name=settings.DEEPFACE_MODEL_NAME,
             # enforce_detection=True,
         )
         # face_data_list = []
