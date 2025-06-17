@@ -98,7 +98,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
 
 # Pengaturan model DeepFace
-DEEPFACE_MODEL_NAME="Dlib"
+MODEL_NAME="Dlib"
 
 # Pengaturan Storage Paths
 SELFIE_STORAGE_PATH="storage/selfies"

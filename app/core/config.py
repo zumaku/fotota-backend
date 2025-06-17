@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    DEEPFACE_MODEL_NAME: str = "Dlib"
+    MODEL_NAME: str = "Dlib"
     DEEPFACE_VECTOR_DIMENSION: int = 128
     
     SELFIE_STORAGE_PATH: str
