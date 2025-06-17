@@ -21,9 +21,7 @@ async def lifespan(app: FastAPI):
     
     logger.info("Application startup")
     
-    # Jalankan pre-loading model yang berat di thread terpisah
-    logger.info("Application startup: Scheduling DeepFace model pre-loading...")
-    await run_in_threadpool(face_recognition_service.warm_up_deepface)
+    # Kode startup
     # -------------------
 
     yield # Aplikasi sekarang siap menerima request
