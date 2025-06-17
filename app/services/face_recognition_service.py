@@ -22,18 +22,18 @@ def _blocking_represent_one_image(image_path: str) -> List[Dict[str, Any]]:
             model_name=settings.DEEPFACE_MODEL_NAME,
             # enforce_detection=True,
         )
-        face_data_list = []
-        for face in extracted_faces:
-            
-            coords = face["facial_area"]            
-            face_data_list.append({
-                "embedding": face["embedding"],
-                "x": coords["x"],
-                "y": coords["y"],
-                "w": coords["w"],
-                "h": coords["h"],
-            })
-        return face_data_list
+        # face_data_list = []
+        # for face in extracted_faces:
+        #     coords = face.facial_area
+        #     face_data_list.append({
+        #         "embedding": face.embedding,
+        #         "x": coords.x,
+        #         "y": coords.y,
+        #         "w": coords.w,
+        #         "h": coords.h,
+        #     })
+        # return face_data_list
+        return extracted_faces
     except Exception:
         return []
 
