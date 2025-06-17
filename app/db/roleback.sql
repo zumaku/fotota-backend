@@ -1,5 +1,8 @@
 -- Hapus tabel jika sudah ada (opsional, untuk memulai dari bersih)
-DROP TABLE IF EXISTS fotota, activity, images, events, users CASCADE;
+DROP TABLE IF EXISTS fotota, activity, images, events, users, faces CASCADE;
+
+-- Install Ekstensi pgvector
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Tabel untuk Pengguna
 CREATE TABLE users (
@@ -58,6 +61,19 @@ CREATE TABLE fotota (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
+-- Tabel  untuk menyimpan setiap wajah yang terdeteksi
+CREATE TABLE faces (
+    id SERIAL PRIMARY KEY,
+    id_image INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    embedding VECTOR(128), 
+    x INTEGER NOT NULL,
+    y INTEGER NOT NULL,
+    w INTEGER NOT NULL,
+    h INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
 -- Membuat Indeks untuk mempercepat pencarian
 CREATE INDEX ix_users_id ON users(id);
 CREATE INDEX ix_users_email ON users(email);
@@ -72,6 +88,8 @@ CREATE INDEX ix_images_id ON images(id);
 CREATE INDEX ix_activity_id ON activity(id);
 
 CREATE INDEX ix_fotota_id ON fotota(id);
+
+CREATE INDEX ON faces USING HNSW (embedding vector_cosine_ops);
 
 -- Catatan: Fungsi onupdate untuk updated_at akan lebih baik ditangani oleh Trigger di PostgreSQL
 -- jika Anda ingin otomatisasi penuh, namun untuk saat ini model SQLAlchemy akan menanganinya saat update.
