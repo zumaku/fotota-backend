@@ -5,6 +5,7 @@ import uuid
 import math
 import shutil
 import aiofiles
+import secrets
 from typing import Optional, List
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, BackgroundTasks
@@ -48,9 +49,17 @@ async def create_event(
     # Buat event di database
     event = await crud_event.create_event(db=db, event_in=event_in, owner_id=admin_user.id)
     
+    # Buat share_code yang unik
+    # Loop untuk memastikan kode benar-benar unik (meskipun kemungkinannya sangat kecil untuk bentrok)
+    while True:
+        share_code = secrets.token_urlsafe(8) # Membuat string acak 8 karakter
+        existing_event = await crud_event.get_event_by_share_code(db, share_code=share_code)
+        if not existing_event:
+            break
+    
     # Generate link unik setelah event dibuat dan memiliki ID
-    generated_link = f"{settings.DEEP_LINK_BASE_URL}/{event.id}"
-    event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=generated_link))
+    shareable_link = f"{settings.API_BASE_URL}/r/{share_code}"
+    event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=shareable_link, share_code=share_code))
     
     # Langsung buat folder event di storage
     # event_folder_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event_updated.id))

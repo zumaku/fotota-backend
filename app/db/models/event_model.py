@@ -14,6 +14,7 @@ class Event(Base):
     hashed_password = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     link = Column(String(255), unique=True, nullable=True)
+    share_code = Column(String(16), unique=True, index=True, nullable=True)
     
     # DIUBAH: Foreign Key ke users.id sekarang adalah Integer
     id_user = Column(Integer, ForeignKey("users.id"), nullable=False)
