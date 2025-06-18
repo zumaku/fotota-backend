@@ -49,8 +49,8 @@ async def create_event(
     event = await crud_event.create_event(db=db, event_in=event_in, owner_id=admin_user.id)
     
     # Generate link unik setelah event dibuat dan memiliki ID
-    unique_link = f"/events/{event.id}/{uuid.uuid4()}" # Contoh format link
-    event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=unique_link))
+    generated_link = f"{settings.DEEP_LINK_BASE_URL}/{event.id}"
+    event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=generated_link))
     
     # Langsung buat folder event di storage
     # event_folder_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event_updated.id))

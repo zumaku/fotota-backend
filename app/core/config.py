@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     def EVENT_STORAGE_PATH(self) -> Path:
         return self.STORAGE_ROOT_PATH / "events"
     
+    DEEP_LINK_BASE_URL: str #
+    
     TF_ENABLE_ONEDNN_OPTS: int = 0
 
     # Opsional: Client ID Google untuk Android/iOS jika perlu validasi audience token Google
