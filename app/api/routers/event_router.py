@@ -59,7 +59,7 @@ async def create_event(
     print(f"Created storage directory for event {event_updated.id} at {event_folder_path}")
     
     # Karena event baru belum punya gambar, kita buat preview placeholder secara manual
-    placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.jpg"
+    placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.png"
     images_preview = [placeholder_url] * 4
     
     # Kita perlu memuat relasi 'owner' secara eksplisit untuk ditampilkan di respons.

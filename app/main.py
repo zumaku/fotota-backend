@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from contextlib import asynccontextmanager
 from app.core.config import settings
@@ -11,9 +10,6 @@ from app.api.routers import auth_router, user_router, event_router, image_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Kode yang berjalan saat STARTUP ---
-    
-    # Kode startup
-    # -------------------
 
     yield # Aplikasi sekarang siap menerima request
 
@@ -28,12 +24,6 @@ app = FastAPI(
     redoc_url="/redoc",          # Sesuaikan path ReDoc
     lifespan=lifespan # Menggunakan lifespan manager baru di FastAPI
 )
-
-# --- MOUNTING UNTUK STATIC FILES ---
-# Ini memberitahu FastAPI bahwa setiap request ke path yang berawalan "/media"
-# harus disajikan sebagai file langsung dari direktori "storage".
-app.mount("/media", StaticFiles(directory="storage"), name="media")
-# ---------------------------------------------
 
 # Sertakan router
 app.include_router(auth_router.router, prefix="/auth", tags=["Authentication"])
