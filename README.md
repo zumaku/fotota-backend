@@ -205,11 +205,10 @@ CREATE INDEX ix_fotota_id ON fotota(id);
 Pastikan Anda berada di direktori `backend/` dan virtual environment Anda aktif.
 
 ```bash
-uvicorn app.main:app --reload --log-config log_config.yaml
+uvicorn app.main:app --reload
 ```
 
-  - `--reload`: Server akan otomatis restart saat Anda mengubah kode.
-  - `--log-config`: Menggunakan file `log_config.yaml` untuk format log yang rapi dan berwarna.
+  - `--reload`: Server akan otomatis restart saat Anda mengubah kode.berwarna.
 
 Server akan berjalan di `http://localhost:8000`.
 
@@ -286,7 +285,6 @@ docker run -d \
   -p 8000:8000 \
   --env-file .env \
   -v ./storage:/app/storage \
-  -v ./logs:/app/logs \
   --name fotota-api \
   fotota-backend
 ```
@@ -302,8 +300,6 @@ Penjelasan Perintah:
 - `--env-file .env`: Menyuntikkan semua variabel konfigurasi dari file .env Anda ke dalam container.
 
 - `-v` ./storage:/app/storage: Menautkan folder storage di laptop Anda ke /app/storage di dalam container. Ini membuat data unggahan Anda permanen.
-
-- `-v` ./logs:/app/logs: Sama seperti di atas, untuk menyimpan file log di laptop Anda.
 
 - `--name fotota-api`: Memberi nama yang mudah diingat pada container Anda.
 

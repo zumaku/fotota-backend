@@ -4,7 +4,6 @@ import os
 import uuid
 import math
 import shutil
-import logging
 import aiofiles
 from typing import Optional, List
 from datetime import timedelta
@@ -18,8 +17,6 @@ from app.core.config import settings
 from app.db.models import User as UserModel, Event as EventModel
 from app.schemas import event_schema, pagination_schema, image_schema, token_schema
 from app.services import face_recognition_service
-
-logger = logging.getLogger(__name__)
 
 os.makedirs(settings.EVENT_STORAGE_PATH, exist_ok=True)
 
@@ -59,7 +56,7 @@ async def create_event(
     # event_folder_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event_updated.id))
     event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_updated.id}"
     os.makedirs(event_folder_path, exist_ok=True)
-    logger.info(f"Created storage directory for event {event_updated.id} at {event_folder_path}")
+    print(f"Created storage directory for event {event_updated.id} at {event_folder_path}")
     
     # Karena event baru belum punya gambar, kita buat preview placeholder secara manual
     placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.jpg"
@@ -177,9 +174,9 @@ async def delete_an_event(
         try:
             # shutil.rmtree adalah operasi blocking, jalankan di thread pool
             await run_in_threadpool(shutil.rmtree, event_folder_path)
-            logger.info(f"Successfully deleted event folder: {event_folder_path}")
+            print(f"Successfully deleted event folder: {event_folder_path}")
         except Exception as e:
-            logger.error(f"Failed to delete event folder {event_folder_path}. Error: {e}", exc_info=True)
+            print(f"Failed to delete event folder {event_folder_path}. Error: {e}", exc_info=True)
             # Jika gagal menghapus file, sebaiknya jangan lanjutkan ke penghapusan DB
             # agar data tetap konsisten dan bisa diperbaiki manual.
             raise HTTPException(status_code=500, detail="Failed to delete event assets from disk.")

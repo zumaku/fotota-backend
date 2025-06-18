@@ -3,15 +3,12 @@
 import os
 import time
 import asyncio
-import logging
 from typing import List, Dict, Any
 from deepface import DeepFace
 from fastapi.concurrency import run_in_threadpool
 from app.crud import crud_event
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal
-
-logger = logging.getLogger(__name__)
 
 def convert_public_url_to_local_path(url: str) -> str:
     """Mengubah URL publik kembali menjadi path disk lokal."""
@@ -86,21 +83,21 @@ def _blocking_deepface_call(source_path: str, db_path: str):
     Fungsi 'pekerja' sinkron ini akan berjalan di background.
     Tugasnya adalah memindai folder event untuk membuat file cache .pkl.
     """
-    logger.info(f"DeepFace analysis started for folder: {db_path}")
+    print(f"DeepFace analysis started for folder: {db_path}")
     DeepFace.find(
         img_path=source_path,
         db_path=db_path,
         model_name=settings.DEEPFACE_MODEL_NAME,
         enforce_detection=False
     )
-    logger.info(f"DeepFace analysis finished for folder: {db_path}")
+    print(f"DeepFace analysis finished for folder: {db_path}")
 
 async def process_event_images_and_update_status(event_id: int, event_storage_path: str):
     """
     Fungsi 'pekerja' asinkron yang lengkap. Ini akan dipanggil sebagai background task.
     Ia membuat sesi DB sendiri, menjalankan AI, dan mengupdate status.
     """
-    logger.info(f"BACKGROUND TASK: Starting for event_id: {event_id}")
+    print(f"BACKGROUND TASK: Starting for event_id: {event_id}")
     
     # Langkah 1: Buat Sesi Database (Nampan) baru khusus untuk tugas ini
     db = AsyncSessionLocal()
@@ -111,7 +108,7 @@ async def process_event_images_and_update_status(event_id: int, event_storage_pa
 
         images_in_folder = [f for f in os.listdir(event_storage_path) if f.endswith(('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'))]
         if not images_in_folder:
-            logger.warning(f"BACKGROUND TASK: No images found for event {event_id}. Task skipped.")
+            print(f"BACKGROUND TASK: No images found for event {event_id}. Task skipped.")
             return
 
         # Ambil satu gambar sebagai pemicu
@@ -123,11 +120,11 @@ async def process_event_images_and_update_status(event_id: int, event_storage_pa
         # Langkah 3: Gunakan Sesi DB untuk mengupdate status menjadi True
         await crud_event.set_event_indexed_status(db=db, event_id=event_id, status=True)
         
-        logger.info(f"BACKGROUND TASK: Successfully indexed event {event_id} and updated status in DB.")
+        print(f"BACKGROUND TASK: Successfully indexed event {event_id} and updated status in DB.")
 
     except Exception as e:
-        logger.error(f"BACKGROUND TASK FAILED for event {event_id}. Error: {e}", exc_info=True)
+        print(f"BACKGROUND TASK FAILED for event {event_id}. Error: {e}", exc_info=True)
     finally:
         # Langkah 4: Sangat penting untuk selalu menutup sesi database
         await db.close()
-        logger.info(f"BACKGROUND TASK: DB session closed for event {event_id}.")
+        print(f"BACKGROUND TASK: DB session closed for event {event_id}.")

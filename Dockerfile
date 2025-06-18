@@ -15,20 +15,17 @@ ENV DEEPFACE_HOME=/app/.deepface
 
 # Buat direktori-direktori yang kita butuhkan
 # Termasuk direktori baru untuk DeepFace
-RUN mkdir -p /app/logs \
-    && mkdir -p /app/storage \
+RUN mkdir -p /app/storage \
     && mkdir -p /app/.deepface
 
 # Berikan kepemilikan SEMUA folder di /app kepada user 'app'
-# Ini akan memastikan user 'app' punya izin menulis ke .deepface, logs, dan storage
+# Ini akan memastikan user 'app' punya izin menulis ke .deepface, dan storage
 RUN chown -R app:app /app
 
 # Salin kode aplikasi Anda.
 COPY ./app /app/app
-COPY ./log_config.yaml /app/log_config.yaml
 
-# Buat direktori logs dan storage
-RUN mkdir -p /app/logs
+# Buat direktori storage
 RUN mkdir -p /app/storage
 
 # Berikan kepemilikan ke user 'app'

@@ -12,7 +12,6 @@ certifi==2025.4.26
 charset-normalizer==3.4.2
 click==8.2.1
 colorama==0.4.6
-colorlog==6.9.0
 deepface==0.0.93
 dlib==20.0.0
 dnspython==2.7.0
