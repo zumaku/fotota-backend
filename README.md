@@ -20,9 +20,14 @@ Backend ini menangani semua logika bisnis, mulai dari autentikasi pengguna, mana
       - Melihat riwayat event yang baru diakses.
       - Mem-bookmark foto favorit ke koleksi "Fotota".
       - Operasi bookmark dan hapus bookmark secara massal.
-  - **Pencarian Wajah**: Endpoint khusus yang terintegrasi dengan `DeepFace` untuk mencari wajah pengguna di dalam sebuah event.
-  - **Proses Latar Belakang**: Indexing wajah dilakukan sebagai *background task* agar tidak memblokir pengguna saat admin mengunggah foto.
-  - **Logging Profesional**: Sistem logging terstruktur dengan warna untuk terminal dan rotasi file harian untuk produksi.
+  - **Pencarian Wajah Lintas Sumber**:
+      - Event Internal: Admin dapat membuat event, mengunggah foto, dan melindunginya dengan password.
+      - Integrasi Google Drive: Pengguna dapat memulai pencarian pada folder Google Drive publik hanya dengan memberikan link.
+  - **Arsitektur AI yang Efisien**:
+      - Migrasi dari Deepface ke Insightface untuk kontrol penuh dan penggunaan memori yang lebih rendah.
+      - Menggunakan PostgreSQL dengan ekstensi pgvector untuk vector similarity search yang sangat cepat.
+      - Proses ekstraksi wajah (embedding) berjalan sebagai background task per gambar, menjaga server tetap responsif.
+  - **Siap untuk Deployment**: Dilengkapi dengan Dockerfile multi-stage yang efisien dan sistem logging profesional.
 
 ## Struktur Projek
 
@@ -46,6 +51,7 @@ app/
   - Python 3.9+
   - PostgreSQL Server
   - `pip` untuk manajemen dependensi
+  - Google Cloud Platform (GCP) Project untuk kredensial OAuth dan Google Drive API
 
 ## Instalasi & Konfigurasi
 
@@ -62,47 +68,8 @@ cd backend
 
 Buat file `.env` di dalam direktori `backend/` dengan menyalin dari `.env.example` atau dari template di bawah ini. Isi semua nilainya sesuai dengan konfigurasi Anda.
 
-**Template `.env`:**
+**Template `.env`:** [📄 Klik di sini](.env.example)
 
-```env
-# Detail Proyek
-PROJECT_NAME="FotoTa API"
-PROJECT_VERSION="1.0.0"
-
-# Base URL (PENTING untuk URL gambar yang benar)
-# Untuk development, gunakan http://localhost:8000. Untuk produksi, gunakan domain publik Anda.
-API_BASE_URL="http://localhost:8000"
-
-# Kredensial Google OAuth (dari GCP, gunakan kredensial Tipe "Web application")
-GOOGLE_CLIENT_ID="MASUKKAN_CLIENT_ID_WEB_ANDA"
-GOOGLE_CLIENT_SECRET="MASUKKAN_CLIENT_SECRET_WEB_ANDA"
-GOOGLE_REDIRECT_URI="http://localhost:8000/api/v1/auth/google/callback"
-
-# Konfigurasi Database PostgreSQL
-POSTGRES_SERVER="localhost"
-POSTGRES_PORT="5432"
-POSTGRES_USER="nama_user_db_anda"
-POSTGRES_PASSWORD="password_db_anda"
-POSTGRES_DB="fotota_db"
-DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}:${POSTGRES_PORT}/${POSTGRES_DB}"
-
-# Pengaturan JWT (Ganti dengan kunci rahasia Anda yang kuat dan acak)
-JWT_SECRET_KEY="secret-key-untuk-access-token"
-JWT_REFRESH_SECRET_KEY="secret-key-lain-untuk-refresh-token"
-JWT_EVENT_SECRET_KEY="secret-key-ketiga-untuk-event-access-token"
-ALGORITHM="HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-
-# Pengaturan model DeepFace
-DEEPFACE_MODEL_NAME="Dlib"
-
-# Pengaturan Storage Paths (Gunakan path absolut)
-STORAGE_ROOT_PATH=/home/your-user/storage
-
-# Pengaturan oneDNN (library optimasi CPU) -> 1 untuk aktif, 0 untuk nonaktif
-TF_ENABLE_ONEDNN_OPTS=0
-```
 
 ### 3\. Setup Virtual Environment & Dependensi
 
@@ -124,77 +91,7 @@ pip install -r requirements.txt
 
 Jalankan skrip SQL di bawah ini pada database PostgreSQL Anda untuk membuat semua tabel yang diperlukan.
 
-```sql
--- Hapus tabel jika sudah ada (opsional, untuk memulai dari bersih)
-DROP TABLE IF EXISTS fotota, activity, images, events, users CASCADE;
-
--- Tabel untuk Pengguna
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    name VARCHAR(255),
-    picture TEXT,
-    selfie TEXT,
-    is_admin BOOLEAN NOT NULL DEFAULT FALSE,
-    google_id VARCHAR(255) NOT NULL UNIQUE,
-    google_refresh_token TEXT,
-    internal_refresh_token_hash VARCHAR(255),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
--- Tabel untuk Events
-CREATE TABLE events (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    date TIMESTAMP WITH TIME ZONE,
-    hashed_password VARCHAR(255) NOT NULL,
-    description TEXT,
-    link VARCHAR(255) UNIQUE,
-    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    indexed_by_robota BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
--- Tabel untuk Gambar/Foto
-CREATE TABLE images (
-    id SERIAL PRIMARY KEY,
-    file_name VARCHAR(255) NOT NULL,
-    url TEXT NOT NULL UNIQUE,
-    id_event INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
--- Tabel untuk log aktivitas
-CREATE TABLE activity (
-    id SERIAL PRIMARY KEY,
-    id_event INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
--- Tabel untuk foto yang di-bookmark
-CREATE TABLE fotota (
-    id SERIAL PRIMARY KEY,
-    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    id_image INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
--- Membuat Indeks untuk mempercepat pencarian
-CREATE INDEX ix_users_id ON users(id);
-CREATE INDEX ix_users_email ON users(email);
-CREATE INDEX ix_users_google_id ON users(google_id);
-CREATE INDEX ix_events_id ON events(id);
-CREATE INDEX ix_events_name ON events(name);
-CREATE INDEX ix_images_id ON images(id);
-CREATE INDEX ix_activity_id ON activity(id);
-CREATE INDEX ix_fotota_id ON fotota(id);
-```
+**SQL File:** [📄 Klik di sini](app/db/roleback.sql)
 
 ### Menjalankan Aplikasi
 
