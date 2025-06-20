@@ -57,7 +57,7 @@ async def start_drive_search(
         message="Search has been initiated. Check back later for results."
     )
 
-@router.get("/{search_id}/results", response_model=drive_search_schema.DriveSearchResultResponse)
+@router.get("/{search_id}", response_model=drive_search_schema.DriveSearchResultResponse)
 async def get_search_results(
     search_id: int,
     db: AsyncSession = Depends(deps.get_db_session),

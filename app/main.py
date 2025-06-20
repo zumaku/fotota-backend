@@ -45,7 +45,7 @@ app.include_router(event_router.router, prefix="/events", tags=["Events"])
 app.include_router(image_router.router, prefix="/images", tags=["Images"])
 app.include_router(activity_router.router, prefix="/activity", tags=["Activity"])
 app.include_router(fotota_router.router, prefix="/fotota", tags=["Fotota"])
-app.include_router(drive_search_router.router, prefix="/api/v1/drive-searches", tags=["Google Drive Search"])
+app.include_router(drive_search_router.router, prefix="/drive-searches", tags=["Google Drive Search"])
 app.include_router(redirect_router.router, prefix="/r", tags=["Redirect"])
 
 @app.get('/', tags=["Welcome"])
