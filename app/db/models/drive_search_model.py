@@ -1,6 +1,6 @@
 # app/db/models/drive_search_model.py
 
-from sqlalchemy import Column, Integer, String, DateTime, func, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, func, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
@@ -9,6 +9,7 @@ class DriveSearch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     drive_folder_id = Column(String(255), nullable=False)
+    drive_url = Column(Text, nullable=True)
     status = Column(String(50), nullable=False, default="processing")
     
     id_user = Column(Integer, ForeignKey("users.id"), nullable=False)

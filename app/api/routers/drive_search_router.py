@@ -3,10 +3,10 @@
 import re
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from typing import List
 from app.api import deps
 from app.crud import crud_drive_search
-from app.db.models import User as UserModel
+from app.db.models import User as UserModel, DriveSearch
 from app.schemas import drive_search_schema
 from app.services import drive_service
 
@@ -41,7 +41,12 @@ async def start_drive_search(
     folder_id = _extract_folder_id(str(request_data.drive_url))
     
     # Buat record pencarian di database
-    new_search = await crud_drive_search.create_drive_search(db, user_id=current_user.id, folder_id=folder_id)
+    new_search = await crud_drive_search.create_drive_search(
+        db,
+        user_id=current_user.id,
+        folder_id=folder_id,
+        original_url=str(request_data.drive_url)
+    )
 
     # Jadwalkan tugas berat di latar belakang
     background_tasks.add_task(
@@ -56,6 +61,24 @@ async def start_drive_search(
         status=new_search.status,
         message="Search has been initiated. Check back later for results."
     )
+    
+@router.get("", response_model=List[drive_search_schema.DriveSearchHistoryItem], summary="Get All Drive Search Sessions")
+async def get_all_drive_searches(
+    db: AsyncSession = Depends(deps.get_db_session),
+    skip: int = 0,
+    limit: int = 100,
+    # Endpoint ini mungkin lebih cocok untuk admin, jadi kita gunakan dependency admin
+    current_user: UserModel = Depends(deps.get_current_active_user)
+):
+    """
+    Mengambil daftar semua sesi pencarian Google Drive yang pernah dilakukan
+    oleh semua pengguna (hanya untuk admin).
+    """
+    # Panggil fungsi CRUD. Fungsi ini dijamin mengembalikan sebuah list.
+    all_searches = await crud_drive_search.get_all_searches(db=db, skip=skip, limit=limit, user_id=current_user.id)
+    
+    # Langsung kembalikan hasilnya.
+    return all_searches
 
 @router.get("/{search_id}", response_model=drive_search_schema.DriveSearchResultResponse)
 async def get_search_results(

@@ -28,10 +28,22 @@ class FoundDriveImagePublic(BaseModel):
     class Config:
         from_attributes = True
 
-# Skema untuk respons akhir saat mengambil hasil pencarian
-class DriveSearchResultResponse(BaseModel):
-    search_id: int
+# Skema untuk menampilkan satu item dalam daftar riwayat pencarian
+class DriveSearchHistoryItem(BaseModel):
+    search_id: int = Field(..., alias="id") # Ambil nilai dari atribut 'id'
     status: str
     drive_folder_id: str
+    drive_url: Optional[HttpUrl] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Skema untuk respons akhir saat mengambil hasil pencarian
+class DriveSearchResultResponse(BaseModel):
+    search_id: int = Field(..., alias="id") # Ambil nilai dari atribut 'id'
+    status: str
+    drive_folder_id: str
+    drive_url: Optional[HttpUrl] = None
     created_at: datetime
     results: List[FoundDriveImagePublic] = []

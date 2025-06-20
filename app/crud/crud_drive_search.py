@@ -1,6 +1,7 @@
 # app/crud/crud_drive_search.py
 
 from typing import List
+from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.future import select
@@ -8,13 +9,33 @@ from sqlalchemy.future import select
 from app.db.models import DriveSearch, FoundDriveImage
 from app.schemas.drive_search_schema import FoundDriveImagePublic
 
-async def create_drive_search(db: AsyncSession, *, user_id: int, folder_id: str) -> DriveSearch:
+async def create_drive_search(db: AsyncSession, *, user_id: int, folder_id: str, original_url: str) -> DriveSearch:
     """Membuat record baru saat pencarian dimulai."""
-    db_search = DriveSearch(id_user=user_id, drive_folder_id=folder_id, status="processing")
+    db_search = DriveSearch(
+        id_user=user_id,
+        drive_folder_id=folder_id,
+        drive_url=original_url,
+        status="processing"
+    )
     db.add(db_search)
     await db.commit()
     await db.refresh(db_search)
     return db_search
+
+async def get_all_searches(db: AsyncSession, *, skip: int = 0, limit: int = 100, user_id: int) -> List[DriveSearch]:
+    """
+    Mengambil semua record pencarian dengan pagination.
+    Otomatis mengembalikan list kosong [] jika tidak ada data.
+    """
+    query = (
+        select(DriveSearch)
+        .filter_by(id_user=user_id) # <-- Cara yang benar dan bersih
+        .order_by(desc(DriveSearch.created_at))
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
 
 async def get_drive_search_results(db: AsyncSession, search_id: int) -> DriveSearch:
     """Mengambil hasil pencarian berdasarkan ID-nya."""
