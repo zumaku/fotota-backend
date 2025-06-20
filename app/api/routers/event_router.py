@@ -1,11 +1,12 @@
 # app/api/routers/event_router.py
 
 import os
+import cv2
 import uuid
 import math
 import shutil
-import logging
 import aiofiles
+import secrets
 from typing import Optional, List
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, BackgroundTasks
@@ -15,11 +16,10 @@ from app.api import deps
 from app.crud import crud_event, crud_image, crud_activity
 from app.core import security
 from app.core.config import settings
+from app.core.model_loader import face_app
 from app.db.models import User as UserModel, Event as EventModel
 from app.schemas import event_schema, pagination_schema, image_schema, token_schema
 from app.services import face_recognition_service
-
-logger = logging.getLogger(__name__)
 
 os.makedirs(settings.EVENT_STORAGE_PATH, exist_ok=True)
 
@@ -51,18 +51,26 @@ async def create_event(
     # Buat event di database
     event = await crud_event.create_event(db=db, event_in=event_in, owner_id=admin_user.id)
     
+    # Buat share_code yang unik
+    # Loop untuk memastikan kode benar-benar unik (meskipun kemungkinannya sangat kecil untuk bentrok)
+    while True:
+        share_code = secrets.token_urlsafe(8) # Membuat string acak 8 karakter
+        existing_event = await crud_event.get_event_by_share_code(db, share_code=share_code)
+        if not existing_event:
+            break
+    
     # Generate link unik setelah event dibuat dan memiliki ID
-    unique_link = f"/events/{event.id}/{uuid.uuid4()}" # Contoh format link
-    event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=unique_link))
+    shareable_link = f"{settings.API_BASE_URL}/r/{share_code}"
+    event_updated = await crud_event.update_event(db, event_db_obj=event, event_in=event_schema.EventUpdate(link=shareable_link, share_code=share_code))
     
     # Langsung buat folder event di storage
     # event_folder_path = os.path.join(settings.EVENT_STORAGE_PATH, str(event_updated.id))
     event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_updated.id}"
     os.makedirs(event_folder_path, exist_ok=True)
-    logger.info(f"Created storage directory for event {event_updated.id} at {event_folder_path}")
+    print(f"Created storage directory for event {event_updated.id} at {event_folder_path}")
     
     # Karena event baru belum punya gambar, kita buat preview placeholder secara manual
-    placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.jpg"
+    placeholder_url = f"{settings.API_BASE_URL}/media/events/no_image.png"
     images_preview = [placeholder_url] * 4
     
     # Kita perlu memuat relasi 'owner' secara eksplisit untuk ditampilkan di respons.
@@ -177,9 +185,9 @@ async def delete_an_event(
         try:
             # shutil.rmtree adalah operasi blocking, jalankan di thread pool
             await run_in_threadpool(shutil.rmtree, event_folder_path)
-            logger.info(f"Successfully deleted event folder: {event_folder_path}")
+            print(f"Successfully deleted event folder: {event_folder_path}")
         except Exception as e:
-            logger.error(f"Failed to delete event folder {event_folder_path}. Error: {e}", exc_info=True)
+            print(f"Failed to delete event folder {event_folder_path}. Error: {e}", exc_info=True)
             # Jika gagal menghapus file, sebaiknya jangan lanjutkan ke penghapusan DB
             # agar data tetap konsisten dan bisa diperbaiki manual.
             raise HTTPException(status_code=500, detail="Failed to delete event assets from disk.")
@@ -275,30 +283,33 @@ async def upload_images_to_event(
     admin_user: UserModel = Depends(deps.get_current_admin_user)
 ):
     """
-    Mengunggah satu atau lebih foto ke sebuah event spesifik.
-    Endpoint ini menggantikan /images/upload yang lama.
+    Hanya mengunggah file gambar ke storage dan menyimpan metadatanya di database.
+    Tidak ada lagi proses indexing di latar belakang.
     """
     event = await crud_event.get_event_by_id(db=db, event_id=event_id)
     if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
-    
+        raise HTTPException(status_code=404, detail="Event not found")
     if event.id_user != admin_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this event.")
+        raise HTTPException(status_code=403, detail="You do not own this event.")
 
     event_photo_path = f"{settings.EVENT_STORAGE_PATH}/{event.id}"
-
+    os.makedirs(event_photo_path, exist_ok=True)
+    
     created_images = []
     for file in files:
-        if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        if not file.content_type.startswith("image/"):
             continue
 
-        file_extension = file.filename.split(".")[-1]
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
-        file_path_on_disk = os.path.join(event_photo_path, unique_filename)
+        unique_filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
+        file_path_on_disk = f"{event_photo_path}/{unique_filename}"
         
-        async with aiofiles.open(file_path_on_disk, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
+        try:
+            async with aiofiles.open(file_path_on_disk, 'wb') as out_file:
+                content = await file.read()
+                await out_file.write(content)
+        except Exception as e:
+            print(f"Failed to save uploaded file {file.filename}: {e}")
+            continue
 
         public_url = f"{settings.API_BASE_URL}/media/events/{event.id}/{unique_filename}"
         
@@ -308,21 +319,9 @@ async def upload_images_to_event(
         created_images.append(db_image)
 
     if not created_images:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid image files were uploaded.")
+        raise HTTPException(status_code=400, detail="No valid image files were uploaded.")
 
-    # Set status kembali ke False, karena ada gambar baru yang butuh di-indeks ulang
-    await crud_event.set_event_indexed_status(db, event_id=event_id, status=False)
-    
-    # TAMBAHKAN TUGAS KE BACKGROUND
-    # Daftarkan fungsi 'pekerja' untuk dijalankan setelah respons ini dikirim.
-    # Kita berikan path absolut ke folder event sebagai argumen.
-    background_tasks.add_task(
-        face_recognition_service.process_event_images_and_update_status,
-        event_id=event_id,
-        event_storage_path=str(event_photo_path)
-    )
-    print(f"INFO: {len(created_images)} files uploaded. Indexing task scheduled for event {event_id}.")
-
+    print(f"{len(created_images)} files uploaded to event {event_id}.")
     return created_images
 
 @router.get("/{event_id}/find-my-face", response_model=List[image_schema.MatchedImageResult], summary="Find My Photos in an Event")
@@ -347,54 +346,56 @@ async def find_my_face_in_event(
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
     
-    # Pengecekan status indexed by robota
-    if not event.indexed_by_robota:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Event is currently being indexed. Please try again in a few moments."
-        )
+    # 3. Dapatkan Vektor dari foto selfie
+    selfie_path = face_recognition_service.convert_public_url_to_local_path(current_user.selfie)
+    try:
+        img_selfie = cv2.imread(selfie_path)
+        if img_selfie is None: raise ValueError("Selfie file not readable")
+        
+        # Jalankan di thread terpisah
+        faces = await run_in_threadpool(face_app.app.get, img_selfie)
+        if not faces: raise ValueError("No face found in selfie")
+        
+        # Gunakan normed_embedding untuk perbandingan cosine similarity
+        target_embedding = faces[0].normed_embedding
 
-    # 3. Tentukan path folder event di disk
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not process selfie: {e}")
+
+    # 2. Panggil service pencarian berbasis folder
     event_folder_path = f"{settings.EVENT_STORAGE_PATH}/{event_id}"
-    
-    # 4. Dapatkan hasil mentah dari service (path disk + koordinat)
-    raw_matches = await face_recognition_service.find_matching_faces(
-        source_image_url=current_user.selfie,
-        event_storage_path=event_folder_path
+    raw_matches = await face_recognition_service.find_similar_faces_in_folder_blocking(
+        target_embedding=target_embedding,
+        event_storage_path=event_folder_path,
+        threshold=0.5 # Ambang batas kemiripan, bisa diatur
     )
     
     if not raw_matches:
-        return [] # Kembalikan list kosong jika tidak ada yang cocok
+        return []
 
-    # 5. Ubah path disk kembali menjadi URL publik untuk dicari di database
+    # 3. Ambil metadata gambar dari DB (sama seperti sebelumnya)
     matched_urls = [
-        path.replace("storage/", f"{settings.API_BASE_URL}/media/", 1) 
+        path.replace(str(settings.STORAGE_ROOT_PATH), f"{settings.API_BASE_URL}/media", 1) 
         for path in [match["disk_path"] for match in raw_matches]
     ]
-
-    # 6. Ambil semua objek Image dari database dalam satu query yang efisien
     image_objects = await crud_image.get_images_by_urls(db, urls=matched_urls)
-    
-    # 7. Buat lookup dictionary untuk akses cepat: url -> ImageObject
     image_map = {image.url: image for image in image_objects}
     
-    # 8. Gabungkan semua data menjadi respons akhir
-    matched_images = []
+    # 4. Gabungkan data untuk respons akhir (sama seperti sebelumnya)
+    final_results = []
     for match in raw_matches:
-        public_url = match["disk_path"].replace("storage/", f"{settings.API_BASE_URL}/media/", 1)
+        public_url = match["disk_path"].replace(str(settings.STORAGE_ROOT_PATH), f"{settings.API_BASE_URL}/media", 1)
         image_obj = image_map.get(public_url)
-        
         if image_obj:
-            # Buat sebuah DICTIONARY Python, bukan objek Pydantic
             result_item = {
                 "id": image_obj.id,
                 "file_name": image_obj.file_name,
                 "url": image_obj.url,
                 "id_event": image_obj.id_event,
                 "created_at": image_obj.created_at,
+                "updated_at": image_obj.updated_at,
                 "face": match["face_coords"]
             }
-            matched_images.append(result_item)
+            final_results.append(result_item)
             
-    # Kembalikan sebuah list of dictionaries
-    return matched_images
+    return final_results

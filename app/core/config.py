@@ -1,7 +1,8 @@
+import os
 from pydantic import PostgresDsn, computed_field
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import Optional
+from pathlib import Path
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "FastAPI Google Auth App"
@@ -12,6 +13,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
+    GOOGLE_API_KEY: str
 
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
@@ -34,10 +36,18 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    MODEL_NAME: str = "Dlib"
+    DEEPFACE_MODEL_NAME: str = "Dlib"
     
-    SELFIE_STORAGE_PATH: str
-    EVENT_STORAGE_PATH: str
+    STORAGE_ROOT_PATH: Path
+    @property
+    def SELFIE_STORAGE_PATH(self) -> Path:
+        return self.STORAGE_ROOT_PATH / "selfies"
+
+    @property
+    def EVENT_STORAGE_PATH(self) -> Path:
+        return self.STORAGE_ROOT_PATH / "events"
+    
+    DEEP_LINK_BASE_URL: str #
     
     TF_ENABLE_ONEDNN_OPTS: int = 0
 
@@ -55,3 +65,7 @@ def get_settings() -> Settings:
     return Settings()
 
 settings = get_settings()
+
+# Pastikan direktori ini ada saat aplikasi dimulai
+os.makedirs(settings.SELFIE_STORAGE_PATH, exist_ok=True)
+os.makedirs(settings.EVENT_STORAGE_PATH, exist_ok=True)

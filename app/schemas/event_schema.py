@@ -22,6 +22,8 @@ class EventUpdate(BaseModel):
     description: Optional[str] = None
     date: Optional[datetime] = None
     password: Optional[str] = Field(None, min_length=4) # Admin bisa ganti password
+    # link: Optional[str]
+    # share_code: Optional[str]
 
 # Skema baru untuk password event
 class EventAccessRequest(BaseModel):
@@ -38,6 +40,7 @@ class EventAccessToken(BaseModel):
 class EventInDBBase(EventBase):
     id: int
     link: Optional[str]
+    share_code: Optional[str]
     indexed_by_robota: bool
     created_at: datetime
     updated_at: datetime

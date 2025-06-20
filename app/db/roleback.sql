@@ -58,6 +58,32 @@ CREATE TABLE fotota (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
+-- Tabel untuk melacak setiap sesi pencarian dari Google Drive
+CREATE TABLE drive_searches (
+    id SERIAL PRIMARY KEY,
+    drive_folder_id VARCHAR(255) NOT NULL,
+    drive_url TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'processing', -- Contoh: processing, completed, failed
+    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Tabel untuk menyimpan setiap gambar yang cocok yang ditemukan dari sebuah sesi pencarian
+CREATE TABLE found_drive_images (
+    id SERIAL PRIMARY KEY,
+    id_drive_search INTEGER NOT NULL REFERENCES drive_searches(id) ON DELETE CASCADE,
+    
+    original_drive_id VARCHAR(255) NOT NULL, -- ID file asli di Google Drive
+    file_name VARCHAR(255) NOT NULL, -- Nama file unik yang kita simpan di storage kita
+    url TEXT NOT NULL UNIQUE,          -- URL publik ke file di storage kita
+    
+    face_coords JSONB, -- Menyimpan data x, y, w, h dalam format JSON
+    similarity REAL,   -- Menyimpan skor kemiripan (0.0 - 1.0)
+
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
 -- Membuat Indeks untuk mempercepat pencarian
 CREATE INDEX ix_users_id ON users(id);
 CREATE INDEX ix_users_email ON users(email);
@@ -72,6 +98,13 @@ CREATE INDEX ix_images_id ON images(id);
 CREATE INDEX ix_activity_id ON activity(id);
 
 CREATE INDEX ix_fotota_id ON fotota(id);
+
+-- Membuat Indeks untuk performa query yang lebih baik
+CREATE INDEX ix_drive_searches_id ON drive_searches(id);
+CREATE INDEX ix_drive_searches_id_user ON drive_searches(id_user);
+
+CREATE INDEX ix_found_drive_images_id ON found_drive_images(id);
+CREATE INDEX ix_found_drive_images_id_drive_search ON found_drive_images(id_drive_search);
 
 -- Catatan: Fungsi onupdate untuk updated_at akan lebih baik ditangani oleh Trigger di PostgreSQL
 -- jika Anda ingin otomatisasi penuh, namun untuk saat ini model SQLAlchemy akan menanganinya saat update.

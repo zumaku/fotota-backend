@@ -55,6 +55,7 @@ async def upload_or_update_selfie(
     file_extension = selfie_file.filename.split(".")[-1]
     unique_filename = f"user_{current_user.id}_{uuid.uuid4()}.{file_extension}"
     file_path = os.path.join(settings.SELFIE_STORAGE_PATH, unique_filename)
+    print(file_path)
 
     # 4. Simpan file baru secara asinkron
     try:

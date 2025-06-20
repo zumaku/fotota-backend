@@ -49,6 +49,10 @@ async def get_event_by_id(db: AsyncSession, event_id: int) -> Optional[EventMode
     )
     return result.scalars().first()
 
+async def get_event_by_share_code(db: AsyncSession, share_code: str) -> Optional[EventModel]:
+    result = await db.execute(select(EventModel).filter(EventModel.share_code == share_code))
+    return result.scalars().first()
+
 async def search_events_by_name(db: AsyncSession, *, query: str) -> List[EventModel]:
     search_query = f"%{query}%"
     result = await db.execute(
