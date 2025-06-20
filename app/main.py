@@ -5,7 +5,7 @@ from app.core.config import settings
 from app.core.model_loader import face_app
 from app.db.database import engine
 from app.db.models import Base # Base dari user_model jika tidak pakai base_class
-from app.api.routers import auth_router, user_router, event_router, image_router, activity_router, fotota_router, redirect_router
+from app.api.routers import auth_router, user_router, event_router, image_router, activity_router, fotota_router, redirect_router, drive_search_router
 
 # Fungsi untuk event startup dan shutdown
 @asynccontextmanager
@@ -45,6 +45,7 @@ app.include_router(event_router.router, prefix="/events", tags=["Events"])
 app.include_router(image_router.router, prefix="/images", tags=["Images"])
 app.include_router(activity_router.router, prefix="/activity", tags=["Activity"])
 app.include_router(fotota_router.router, prefix="/fotota", tags=["Fotota"])
+app.include_router(drive_search_router.router, prefix="/api/v1/drive-searches", tags=["Google Drive Search"])
 app.include_router(redirect_router.router, prefix="/r", tags=["Redirect"])
 
 @app.get('/', tags=["Welcome"])
