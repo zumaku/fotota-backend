@@ -228,6 +228,48 @@ async def get_event_access_token(
     
     return event_schema.EventAccessToken(event_access_token=eat)
 
+@router.get("/{event_id}/my-event-images", response_model=pagination_schema.PaginatedResponse[image_schema.ImagePublic], summary="Get Images in an Event with Pagination")
+async def get_images_in_event(
+    event_id: int,
+    db: AsyncSession = Depends(deps.get_db_session),
+    # Parameter query dengan validasi dan nilai default
+    page: int = Query(1, gt=0, description="Halaman yang diminta"),
+    limit: int = Query(10, gt=0, le=50, description="Jumlah item per halaman (max: 50)"),
+    sort_by: image_schema.ImageSortBy = Query(image_schema.ImageSortBy.created_at, description="Field untuk sorting"),
+    sort_order: image_schema.SortOrder = Query(image_schema.SortOrder.desc, description="Urutan sorting"),
+    admin_user: UserModel = Depends(deps.get_current_admin_user)
+):
+    """
+    [ WAJIB menggunakan Event Access Token (EAT) yang didapat dari endpoint /access! ]
+    
+    Mengambil daftar gambar dari sebuah event dengan fitur lengkap:
+    - **Pagination**: `page` dan `limit`
+    - **Sorting**: `sort_by` (`created_at`, `file_name`) dan `sort_order` (`asc`, `desc`)
+    - **Searching**: `search` (berdasarkan nama file)
+    
+    Endpoint ini bisa digunakan untuk mengimplementasikan "infinite scroll" di Flutter.
+    """
+    
+    # Verifikasi dulu apakah event-nya ada
+    event = await crud_event.get_event_by_id(db, event_id=event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.id_user != admin_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+    # Panggil fungsi CRUD yang canggih
+    items, total_items = await crud_image.get_images_by_event_paginated(
+        db=db,
+        event_id=event_id,
+        page=page, limit=limit, sort_by="created_at", sort_order="desc"
+    )
+    
+    total_pages = math.ceil(total_items / limit)
+
+    return pagination_schema.PaginatedResponse(
+        total_items=total_items, total_pages=total_pages, current_page=page, limit=limit, items=items
+    )
+    
 @router.get("/{event_id}/images", response_model=pagination_schema.PaginatedResponse[image_schema.ImagePublic], summary="Get Images in an Event with Pagination")
 async def get_images_in_event(
     db: AsyncSession = Depends(deps.get_db_session),
