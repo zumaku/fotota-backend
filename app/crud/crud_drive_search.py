@@ -9,11 +9,12 @@ from sqlalchemy.future import select
 from app.db.models import DriveSearch, FoundDriveImage
 from app.schemas.drive_search_schema import FoundDriveImagePublic
 
-async def create_drive_search(db: AsyncSession, *, user_id: int, folder_id: str, original_url: str) -> DriveSearch:
+async def create_drive_search(db: AsyncSession, *, user_id: int, folder_id: str, original_url: str, drive_name: str) -> DriveSearch:
     """Membuat record baru saat pencarian dimulai."""
     db_search = DriveSearch(
         id_user=user_id,
         drive_folder_id=folder_id,
+        drive_name=drive_name,
         drive_url=original_url,
         status="processing"
     )

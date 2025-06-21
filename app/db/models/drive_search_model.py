@@ -9,6 +9,7 @@ class DriveSearch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     drive_folder_id = Column(String(255), nullable=False)
+    drive_name = Column(String(255), nullable=True)
     drive_url = Column(Text, nullable=True)
     status = Column(String(50), nullable=False, default="processing")
     

@@ -40,12 +40,21 @@ async def start_drive_search(
 
     folder_id = _extract_folder_id(str(request_data.drive_url))
     
+    # Panggil service untuk mendapatkan detail folder dari Google
+    try:
+        folder_details = await drive_service.get_drive_folder_details(folder_id=folder_id)
+        folder_name = folder_details.get("name", "Unknown Drive Folder")
+    except Exception as e:
+        # Jika gagal mendapatkan info dari GDrive (misal: folder tidak ada, atau API key salah)
+        raise HTTPException(status_code=404, detail=f"Could not retrieve Google Drive folder details: {e}")
+    
     # Buat record pencarian di database
     new_search = await crud_drive_search.create_drive_search(
         db,
         user_id=current_user.id,
         folder_id=folder_id,
-        original_url=str(request_data.drive_url)
+        original_url=str(request_data.drive_url),
+        drive_name=folder_name
     )
 
     # Jadwalkan tugas berat di latar belakang
@@ -96,10 +105,4 @@ async def get_search_results(
     if search_session.id_user != current_user.id:
         raise HTTPException(status_code=403, detail="You do not have permission to view these results.")
 
-    return drive_search_schema.DriveSearchResultResponse(
-        search_id=search_session.id,
-        status=search_session.status,
-        drive_folder_id=search_session.drive_folder_id,
-        created_at=search_session.created_at,
-        results=search_session.found_images
-    )
+    return search_session

@@ -99,7 +99,11 @@ async def login_via_google(
     g_picture = google_user_info.get("picture")
 
     user = await crud_user.get_user_by_google_id(db, google_id=g_id)
+    is_new_user = False
     if not user:
+        # Set is_new_user jadi True
+        is_new_user = True
+        
         # Cek lagi via email, mungkin user pernah daftar dengan cara lain di masa depan
         user = await crud_user.get_user_by_email(db, email=g_email)
         if user:
@@ -146,7 +150,8 @@ async def login_via_google(
 
     return token_schema.Token(
         access_token=internal_access_token,
-        refresh_token=internal_refresh_token
+        refresh_token=internal_refresh_token,
+        is_new_user=is_new_user
     )
 
 @router.post("/refresh", response_model=token_schema.Token, summary="Refresh Access Token")
