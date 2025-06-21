@@ -24,6 +24,7 @@ CREATE TABLE events (
     hashed_password VARCHAR(255) NOT NULL,
     description TEXT,
     link VARCHAR(255) UNIQUE,
+    share_code VARCHAR(16) UNIQUE,
     indexed_by_robota BOOLEAN NOT NULL DEFAULT FALSE,
     id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
