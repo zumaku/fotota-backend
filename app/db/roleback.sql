@@ -62,6 +62,7 @@ CREATE TABLE fotota (
 CREATE TABLE drive_searches (
     id SERIAL PRIMARY KEY,
     drive_folder_id VARCHAR(255) NOT NULL,
+    drive_name VARCHAR(255),
     drive_url TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'processing', -- Contoh: processing, completed, failed
     id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

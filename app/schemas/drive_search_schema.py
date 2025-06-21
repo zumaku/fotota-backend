@@ -33,6 +33,7 @@ class DriveSearchHistoryItem(BaseModel):
     search_id: int = Field(..., alias="id") # Ambil nilai dari atribut 'id'
     status: str
     drive_folder_id: str
+    drive_name: str = None
     drive_url: Optional[HttpUrl] = None
     created_at: datetime
 
@@ -44,6 +45,7 @@ class DriveSearchResultResponse(BaseModel):
     search_id: int = Field(..., alias="id") # Ambil nilai dari atribut 'id'
     status: str
     drive_folder_id: str
+    drive_name: str = None
     drive_url: Optional[HttpUrl] = None
     created_at: datetime
-    results: List[FoundDriveImagePublic] = []
+    found_images: List[FoundDriveImagePublic] = []

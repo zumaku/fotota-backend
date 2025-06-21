@@ -125,3 +125,47 @@ async def run_drive_search_and_save(search_id: int, folder_id: str, user_selfie_
         print(f"❌ DRIVE SEARCH TASK FAILED for search_id: {search_id}. Error: {e}", exc_info=True)
     finally:
         await db.close()
+        
+
+# Kita definisikan service Google Drive di sini
+# API_KEY diambil dari settings yang kita muat dari .env
+try:
+    drive_service = build('drive', 'v3', developerKey=settings.GOOGLE_API_KEY)
+except Exception as e:
+    print(f"Gagal membangun service Google Drive. Pastikan GOOGLE_API_KEY valid. Error: {e}")
+    drive_service = None
+
+def _blocking_get_folder_details(folder_id: str) -> dict:
+    """Fungsi sinkron untuk memanggil Google Drive API & mendapatkan metadata folder."""
+    if not drive_service:
+        raise Exception("Google Drive service is not initialized.")
+        
+    try:
+        # Meminta hanya field 'id' dan 'name' untuk efisiensi
+        file_metadata = drive_service.files().get(
+            fileId=folder_id,
+            fields='id, name'
+        ).execute()
+        
+        return file_metadata
+    except Exception as e:
+        print(f"Gagal mendapatkan detail folder Google Drive untuk ID {folder_id}", exc_info=True)
+        # Melempar kembali error agar bisa ditangkap oleh fungsi pemanggil
+        raise e
+
+async def get_drive_folder_details(folder_id: str) -> dict:
+    """
+    Fungsi asinkron yang akan dipanggil oleh router.
+    Menjalankan panggilan API yang blocking di thread terpisah.
+    """
+    try:
+        # Jalankan fungsi blocking di thread pool agar tidak mengganggu server utama
+        folder_details = await run_in_threadpool(_blocking_get_folder_details, folder_id)
+        return folder_details
+    except Exception as e:
+        print(f"Tidak dapat mengambil detail folder dengan ID '{folder_id}' dari Google Drive. Folder mungkin tidak ada, tidak dibagikan secara publik, atau API key tidak valid.")
+        # Ubah error apapun dari Google menjadi HTTPException yang jelas untuk klien
+        # raise HTTPException(
+        #     status_code=status.HTTP_404_NOT_FOUND,
+        #     detail=f"Tidak dapat mengambil detail folder dengan ID '{folder_id}' dari Google Drive. Folder mungkin tidak ada, tidak dibagikan secara publik, atau API key tidak valid."
+        # )
